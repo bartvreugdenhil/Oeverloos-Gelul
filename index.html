@@ -472,6 +472,7 @@
   <header class="top">
     <h1 id="tripTitle">Untitled Trip</h1>
     <div class="sub" id="entryCount">0 entries logged</div>
+    <div class="sub" id="signOutRow" style="display:none;"><button id="signOutBtn" style="background:none;border:none;padding:0;color:var(--lilac-deep);font:inherit;font-weight:600;cursor:pointer;">Signed in — sign out</button></div>
     <div class="segmented">
       <button id="tabOverviewBtn" class="active">Overview</button>
       <button id="tabLogBtn">Log</button>
@@ -493,16 +494,20 @@
 <div class="overlay" id="passOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2 id="passTitle">Set an edit passcode</h2>
-    <div class="sheet-sub" id="passSub">Anyone with this link can view the log. Set a passcode so only you can add entries. (Light friction, not real security.)</div>
+    <h2 id="passTitle">Sign in to make changes</h2>
+    <div class="sheet-sub" id="passSub">Anyone with this link can view the log. Only the trip owner can sign in to add entries.</div>
     <div class="field">
-      <label>Passcode</label>
-      <input type="password" id="passInput">
+      <label>Email</label>
+      <input type="text" id="passEmail" autocomplete="username">
     </div>
-    <div class="err" id="passErr">That's not the right passcode.</div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="passInput" autocomplete="current-password">
+    </div>
+    <div class="err" id="passErr">That's not the right email/password.</div>
     <div class="sheet-actions">
       <button class="btn" id="passCancel">Cancel</button>
-      <button class="btn primary" id="passSubmit">Continue</button>
+      <button class="btn primary" id="passSubmit">Sign in</button>
     </div>
   </div>
 </div>
@@ -581,15 +586,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <script>
 (function(){
   "use strict";
 
   // ---------- Firebase setup ----------
   // Project already created (see console.firebase.google.com). If you ever need to
-  // point this at a different project: paste new values here, and in Firestore > Rules
-  // make sure it says `allow read, write: if true;` (published). That's intentionally
-  // open — it pairs with the in-app passcode for light friction, not real security.
+  // point this at a different project: paste new values here. Writes are restricted
+  // to the signed-in owner account via Firestore security rules (Authentication +
+  // Firestore > Rules in the console) — see sign-in flow below.
   const firebaseConfig = {
     apiKey: "AIzaSyBF7E8nJZWVeLpIlhEKlusGIrZ56fo0u1I",
     authDomain: "indonesietnam.firebaseapp.com",
@@ -600,10 +606,12 @@
   };
 
   let db = null;
+  let auth = null;
   let firebaseReady = false;
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    auth = firebase.auth();
     // Long-polling avoids a connection failure seen in some sandboxed/proxied
     // network contexts (e.g. testing inside Claude's own preview). Harmless
     // on a normally-hosted page too.
@@ -618,6 +626,7 @@
   let editUnlocked = false;
   let pendingTrack = null; // parsed track for the entry currently being created
   let overviewMapInstance = null;
+  let dayMapInstances = {};
 
   const $ = (id) => document.getElementById(id);
 
@@ -923,6 +932,8 @@
     }
 
     container.innerHTML = '';
+    Object.values(dayMapInstances).forEach(m=>{ try{ m.remove(); }catch(e){} });
+    dayMapInstances = {};
     ids.forEach((id)=>{
       const e = entries[id];
       if(!e) return;
@@ -956,7 +967,7 @@
       container.appendChild(card);
 
       if(e.track && e.track.length>1){
-        setTimeout(()=>drawMap('map-'+id, e.track, true), 0);
+        setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
       }
     });
 
@@ -1005,14 +1016,15 @@
   function drawMap(elId, track, isSmall){
     const el = $(elId);
     if(!el || !window.L) return;
-    const map = L.map(el, {zoomControl:false, attributionControl:false, scrollWheelZoom:false});
+    const map = L.map(el, {zoomControl:false, attributionControl:true, scrollWheelZoom:false});
     const latlngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
     if(latlngs.length<2) return;
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19});
+    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
     addTileFailNote(el, map)(tiles);
     tiles.addTo(map);
     const line = L.polyline(latlngs, {color:'#8670C9', weight:3}).addTo(map);
-    map.fitBounds(line.getBounds(), {padding:[16,16]});
+    map._routeBounds = line.getBounds();
+    map.fitBounds(map._routeBounds, {padding:[16,16]});
     L.circleMarker(latlngs[0], {radius:5, color:'#5B6B36', fillColor:'#5B6B36', fillOpacity:1}).addTo(map);
     L.circleMarker(latlngs[latlngs.length-1], {radius:5, color:'#8670C9', fillColor:'#8670C9', fillOpacity:1}).addTo(map);
     return map;
@@ -1032,9 +1044,9 @@
       return;
     }
 
-    const map = L.map(el, {zoomControl:true, attributionControl:false});
+    const map = L.map(el, {zoomControl:true, attributionControl:true});
     overviewMapInstance = map;
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19});
+    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
     addTileFailNote(el, map)(tiles);
     tiles.addTo(map);
 
@@ -1096,6 +1108,15 @@
     if(overviewActive && overviewMapInstance){
       setTimeout(()=> overviewMapInstance.invalidateSize(), 50);
     }
+    if(!overviewActive){
+      setTimeout(()=>{
+        Object.values(dayMapInstances).forEach(m=>{
+          if(!m) return;
+          m.invalidateSize();
+          if(m._routeBounds) m.fitBounds(m._routeBounds, {padding:[16,16]});
+        });
+      }, 50);
+    }
   }
   $('tabOverviewBtn').addEventListener('click', ()=>switchTab('overview'));
   $('tabLogBtn').addEventListener('click', ()=>switchTab('log'));
@@ -1111,58 +1132,46 @@
     }, 80);
   }
 
-  // ---------- passcode flow (dormant for now — editUnlocked is forced true) ----------
-  function openPassOverlay(mode){
+  // ---------- sign-in flow (Firebase Auth — only the owner's account can write) ----------
+  function openPassOverlay(){
     $('passErr').style.display='none';
+    $('passEmail').value='';
     $('passInput').value='';
-    if(mode==='set'){
-      $('passTitle').textContent='Set an edit passcode';
-      $('passSub').textContent='Anyone with this link can view the log. Set a passcode so only you can add entries. (Light friction, not real security.)';
-    } else {
-      $('passTitle').textContent='Enter passcode';
-      $('passSub').textContent='This link is for adding an entry — enter the passcode to continue.';
-    }
     $('passOverlay').classList.add('open');
-    $('passOverlay').dataset.mode = mode;
   }
   function closePassOverlay(){ $('passOverlay').classList.remove('open'); }
+
+  function onSignedIn(){
+    editUnlocked = true;
+    $('tripTitle').setAttribute('contenteditable','true');
+    $('signOutRow').style.display='block';
+    if(manifest) renderTimeline();
+  }
+  function onSignedOut(){
+    editUnlocked = false;
+    $('tripTitle').setAttribute('contenteditable','false');
+    $('signOutRow').style.display='none';
+    if(manifest) renderTimeline();
+  }
 
   $('passSubmit').addEventListener('click', async ()=>{
     const errEl = $('passErr');
     errEl.style.display='none';
-    const mode = $('passOverlay').dataset.mode;
-    const val = $('passInput').value;
-    if(!val){
-      errEl.textContent = 'Type a passcode first.';
+    const email = $('passEmail').value.trim();
+    const pass = $('passInput').value;
+    if(!email || !pass){
+      errEl.textContent = 'Enter both email and password.';
       errEl.style.display='block';
       return;
     }
     $('passSubmit').disabled = true;
     try{
-      if(mode==='set'){
-        manifest.passcode = val;
-        await saveManifest(manifest);
-        editUnlocked = true;
-        $('tripTitle').setAttribute('contenteditable','true');
-        closePassOverlay();
-        openEntryOverlay();
-        renderTimeline();
-      } else {
-        if(val===manifest.passcode){
-          editUnlocked = true;
-          $('tripTitle').setAttribute('contenteditable','true');
-          closePassOverlay();
-          openEntryOverlay();
-          renderTimeline();
-        } else {
-          errEl.textContent = 'That\'s not the right passcode.';
-          errEl.style.display='block';
-        }
-      }
+      await auth.signInWithEmailAndPassword(email, pass);
+      closePassOverlay();
+      openEntryOverlay();
     }catch(err){
-      console.error('passcode save failed', err);
-      const detail = (err && (err.message || err.toString())) || 'unknown error';
-      errEl.textContent = 'Save failed: ' + detail;
+      console.error('sign-in failed', err);
+      errEl.textContent = 'Sign-in failed: ' + (err.message || err.code || 'unknown error');
       errEl.style.display='block';
     }finally{
       $('passSubmit').disabled = false;
@@ -1172,6 +1181,7 @@
   $('passInput').addEventListener('keydown', (e)=>{
     if(e.key==='Enter') $('passSubmit').click();
   });
+  $('signOutBtn').addEventListener('click', ()=> auth.signOut());
 
   // ---------- entry form ----------
   let highlightIdx = 0;
@@ -1190,8 +1200,7 @@
 
   $('addBtn').addEventListener('click', ()=>{
     if(editUnlocked){ openEntryOverlay(); return; }
-    if(manifest && manifest.passcode){ openPassOverlay('enter'); }
-    else { openPassOverlay('set'); }
+    openPassOverlay();
   });
   $('entryCancel').addEventListener('click', closeEntryOverlay);
 
@@ -1317,6 +1326,12 @@
     manifest.title = $('tripTitle').textContent.trim();
     await saveManifest(manifest);
   });
+
+  if(auth){
+    auth.onAuthStateChanged(user=>{
+      if(user) onSignedIn(); else onSignedOut();
+    });
+  }
 
   // ---------- init ----------
   async function init(){
