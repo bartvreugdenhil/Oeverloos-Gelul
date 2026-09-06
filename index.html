@@ -1016,13 +1016,14 @@
   function drawMap(elId, track, isSmall){
     const el = $(elId);
     if(!el || !window.L) return;
-    const map = L.map(el, {zoomControl:false, attributionControl:true, scrollWheelZoom:false});
+    const map = L.map(el, {zoomControl:true, attributionControl:true, scrollWheelZoom:false});
     const latlngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
     if(latlngs.length<2) return;
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
     addTileFailNote(el, map)(tiles);
     tiles.addTo(map);
-    const line = L.polyline(latlngs, {color:'#8670C9', weight:3}).addTo(map);
+    L.polyline(latlngs, {color:'#fff', weight:7, opacity:0.9}).addTo(map);
+    const line = L.polyline(latlngs, {color:'#8670C9', weight:5, opacity:0.95}).addTo(map);
     map._routeBounds = line.getBounds();
     map.fitBounds(map._routeBounds, {padding:[16,16]});
     L.circleMarker(latlngs[0], {radius:5, color:'#5B6B36', fillColor:'#5B6B36', fillOpacity:1}).addTo(map);
@@ -1062,7 +1063,8 @@
       track.forEach(p=>{ if(p.lat!=null&&p.lon!=null) allBounds.push([p.lat,p.lon]); });
 
       const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
-      L.polyline(routeLatLngs, {color:'#8670C9', weight:3, opacity:0.9}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#fff', weight:6, opacity:0.85}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#8670C9', weight:4, opacity:0.95}).addTo(map);
 
       const e = entries[id];
       const routeLabel = (e.start||'?') + ' → ' + (e.finish||'?');
