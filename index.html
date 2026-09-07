@@ -42,7 +42,10 @@
 
     /* --- colour roles --- */
     --ground:#F7F4EE;          /* warm paper page ground */
-    --ground-dark:#3A431F;     /* full-bleed dark bands (hero, stats) */
+    --ground-dark:#584590;     /* full-bleed dark bands (hero, stats) -- deep
+                                  lilac, 7.9:1 against white type */
+    --ground-dark-rgb:88,69,144;
+    --on-dark-accent:#D8C39A;  /* warm accent used on the lilac grounds */
     --ground-paper:#F8F1E2;    /* editorial text sections */
     --surface:#FFFFFF;         /* cards sitting on the ground */
     --ink:#1C1C1E;
@@ -144,33 +147,44 @@
   }
 
   /* ---------- 1. masthead ---------- */
+  /* Tall enough that the photo is genuinely the subject, with the wordmark
+     anchored at the bottom over a gradient that only turns opaque where the
+     type actually sits -- so the top two-thirds of the image stays clear. */
   .hero{
     position:relative;
     background:var(--ground-dark);
     color:var(--ink-invert);
     overflow:hidden;
+    min-height:min(74vh,560px);
+    display:flex;
+    align-items:flex-end;
     margin-bottom:var(--s7);
   }
+  .hero.no-photo{min-height:0;}
   .hero-photo{
     position:absolute;inset:0;
     background-size:cover;
     background-position:center;
-    opacity:0.5;
   }
-  /* Wash keeps the wordmark legible over any photo the user happens to upload. */
   .hero-wash{
     position:absolute;inset:0;
     background:linear-gradient(180deg,
-      rgba(58,67,31,0.55) 0%,
-      rgba(58,67,31,0.78) 45%,
-      rgba(58,67,31,0.96) 100%);
+      rgba(var(--ground-dark-rgb),0.10) 0%,
+      rgba(var(--ground-dark-rgb),0.22) 38%,
+      rgba(var(--ground-dark-rgb),0.72) 68%,
+      rgba(var(--ground-dark-rgb),0.96) 100%);
   }
+  /* With no photo there is nothing to reveal, so the band goes flat and short. */
+  .hero.no-photo .hero-wash{background:var(--ground-dark);}
   .hero-inner{
     position:relative;
+    width:100%;
     max-width:var(--measure);
     margin:0 auto;
     padding:var(--s8) var(--s4) var(--s6);
+    text-shadow:0 1px 12px rgba(0,0,0,0.28);
   }
+  .hero.no-photo .hero-inner{padding-top:var(--s7);text-shadow:none;}
   .hero h1{
     font-family:var(--font-display);
     font-optical-sizing:auto;
@@ -191,25 +205,14 @@
   }
   .hero-rule{
     width:52px;height:3px;
-    background:var(--lilac);
+    background:var(--on-dark-accent);
     border-radius:var(--r-full);
     margin:var(--s4) 0 0;
   }
-  .hero-meta{
-    display:flex;
-    flex-wrap:wrap;
-    gap:var(--s2) var(--s4);
-    margin-top:var(--s5);
-    font-size:var(--t-small);
-    font-weight:600;
-    color:var(--ink-invert-soft);
-    font-variant-numeric:tabular-nums;
-  }
-  .hero-meta .dot{color:var(--lilac);}
-  #signOutRow{margin-top:var(--s3);font-size:var(--t-small);}
+  #signOutRow{margin-top:var(--s4);font-size:var(--t-small);}
   #signOutRow button{
     background:none;border:none;padding:0;
-    color:var(--lilac);
+    color:var(--on-dark-accent);
     font:inherit;font-weight:600;cursor:pointer;
   }
 
@@ -251,11 +254,10 @@
     margin:0;
   }
   .kpi{min-width:0;grid-column:span 2;}
-  .kpi.hero-stat,
-  .kpi.pair{grid-column:span 3;}
+  .kpi.hero-stat{grid-column:span 3;}
   .kpi-icon{
     width:18px;height:18px;
-    color:var(--lilac);
+    color:var(--on-dark-accent);
     margin-bottom:var(--s2);
     display:block;
   }
@@ -373,11 +375,14 @@
   }
 
   /* ---------- 6. daily note ---------- */
+  /* Sits directly under the dark stats band, so it needs real lift to read as
+     a card resting on the page rather than another flat section. */
   .titled-card{
-    background:var(--ground-paper);
+    background:var(--surface);
     border-radius:var(--r-lg);
     padding:var(--s5);
     border-left:4px solid var(--beige-deep);
+    box-shadow:0 10px 30px rgba(28,28,30,0.13), 0 2px 6px rgba(28,28,30,0.07);
   }
   .titled-card .cat-title{
     font-family:var(--font-body);
@@ -577,6 +582,7 @@
     padding-left:var(--s4);
     border-left:3px solid var(--accent);
   }
+  .freetext.italic{font-style:italic;}
   .freetext.empty{color:var(--ink-soft);font-style:italic;}
 
   .day .segmented{margin:var(--s5) 0 var(--s4);}
@@ -601,7 +607,11 @@
     margin:0 0 var(--s2);
   }
 
-  .charts{margin:var(--s5) 0 0;}
+  .charts{
+    margin:var(--s5) 0 0;
+    padding-top:var(--s5);
+    border-top:1px solid var(--sep);
+  }
   .chart-block{margin-bottom:var(--s4);}
   .chart-block:last-child{margin-bottom:0;}
   .chart-block h4{
@@ -621,10 +631,15 @@
     display:grid;
     grid-template-columns:repeat(3,1fr);
     gap:var(--s3);
-    margin-top:var(--s5);
-    padding-top:var(--s4);
-    border-top:1px solid var(--sep);
+    margin-top:var(--s4);
   }
+  .counter-icon{
+    width:18px;height:18px;
+    color:var(--accent);
+    margin-bottom:var(--s2);
+    display:block;
+  }
+  .counter-icon svg{width:100%;height:100%;}
 
   .photos{
     display:flex;
@@ -928,9 +943,6 @@
     <h1>Oeverloos Gelul</h1>
     <div class="app-subtitle">Vrij associeren op twee wielen</div>
     <div class="hero-rule"></div>
-    <div class="hero-meta" id="heroMeta">
-      <span id="entryCount">0 reisbewegingen gelogd</span>
-    </div>
     <div id="signOutRow" style="display:none;"><button id="signOutBtn">Ingelogd — uitloggen</button></div>
   </div>
 </header>
@@ -959,19 +971,19 @@
     </div>
   </section>
 
-  <section class="section" id="stagesSection">
-    <div class="section-inner">
-      <div class="section-label">Etappes</div>
-      <div class="stage-list" id="stageList"></div>
-    </div>
-  </section>
-
   <section class="section">
     <div class="section-inner">
       <div class="titled-card" id="dailyCardWrap">
         <div class="cat-title">Vrije associatie van de dag</div>
         <div class="editable-text" id="dailyCard"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="section" id="stagesSection">
+    <div class="section-inner">
+      <div class="section-label">Etappes</div>
+      <div class="stage-list" id="stageList"></div>
     </div>
   </section>
 
@@ -1527,6 +1539,16 @@
     return '<div class="stat"><span class="v">'+value+'</span><span class="l">'+label+'</span></div>';
   }
 
+  // Same shape as statBlock but icon-led, for the three manual counters at the
+  // foot of Keiharde Cijfers.
+  function counterBlock(iconKey, label, value){
+    return '<div class="stat counter">'+
+      '<div class="counter-icon">'+KPI_ICONS[iconKey]+'</div>'+
+      '<span class="v">'+value+'</span>'+
+      '<span class="l">'+label+'</span>'+
+    '</div>';
+  }
+
   const KPI_ICONS = {
     words: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     days: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>',
@@ -1611,41 +1633,35 @@
     if(!el) return;
     const k = computeKPIs();
     // 7 KPIs on a 6-column grid, fully resolved with no dangling card:
-    // row 1 = two hero stats (span 3), row 2 = a trio (span 2),
-    // row 3 = a natural pair (span 3). 3+3 / 2+2+2 / 3+3.
+    // two large pairs (span 3) then a trio of counters (span 2).
+    // 3+3 / 3+3 / 2+2+2.
     el.innerHTML =
       kpiBlock('bike', 'kilometer gefietst', fmt(k.km,1), 'hero-stat') +
       kpiBlock('mountain', 'hoogtemeters overbrugd', fmt(k.elev,0), 'hero-stat') +
-      kpiBlock('days', 'dagen vrij geassocieerd', k.days) +
-      kpiBlock('words', 'woorden oeverloos geluld', k.words) +
+      kpiBlock('words', 'woorden oeverloos geluld', k.words, 'hero-stat') +
+      kpiBlock('days', 'dagen vrij geassocieerd', k.days, 'hero-stat') +
       kpiBlock('flame', 'bitterballen verbrand', k.bb) +
-      kpiBlock('eye', 'mooie dingen gezien', k.mooie, 'pair') +
-      kpiBlock('food', 'lekkere dingen gegeten', k.lekkere, 'pair');
+      kpiBlock('eye', 'mooie dingen gezien', k.mooie) +
+      kpiBlock('food', 'lekkere dingen gegeten', k.lekkere);
   }
 
   // ---------- masthead ----------
   function renderHero(){
     const photoEl = $('heroPhoto');
-    const meta = $('heroMeta');
-    if(!photoEl || !meta) return;
+    const hero = $('hero');
+    if(!photoEl || !hero) return;
 
     const ids = orderedIds();
 
-    // Newest entry with a photo backs the hero; falls back to the solid
-    // olive ground when there is nothing to show yet.
+    // Newest entry with a photo backs the hero; with none, the band collapses
+    // to a short flat colour field instead of reserving space for nothing.
     let heroPhoto = null;
     for(let i = ids.length - 1; i >= 0; i--){
       const e = entries[ids[i]];
       if(e && e.photos && e.photos.length){ heroPhoto = e.photos[0]; break; }
     }
     photoEl.style.backgroundImage = heroPhoto ? 'url("'+heroPhoto+'")' : '';
-
-    const k = computeKPIs();
-    const bits = [ids.length + (ids.length===1 ? ' etappe' : ' etappes')];
-    if(k.km > 0) bits.push(fmt(k.km,1) + ' km');
-    if(k.elev > 0) bits.push(fmt(k.elev,0) + ' hm');
-    meta.innerHTML = '<span id="entryCount">' +
-      bits.join('</span><span class="dot">·</span><span>') + '</span>';
+    hero.classList.toggle('no-photo', !heroPhoto);
   }
 
   // ---------- stage list ----------
@@ -1840,9 +1856,10 @@
     if(e.key==='Escape' && $('entryPane').classList.contains('open')) closeEntryPane();
   });
 
-  function textBlock(text){
+  function textBlock(text, italic){
+    const cls = 'freetext' + (italic ? ' italic' : '');
     const t = (text||'').trim();
-    return t ? '<div class="freetext">'+esc(text)+'</div>' : '<div class="freetext empty">Nog niets ingevuld.</div>';
+    return t ? '<div class="'+cls+'">'+esc(text)+'</div>' : '<div class="'+cls+' empty">Nog niets ingevuld.</div>';
   }
 
   function renderCategoryContent(id, cat){
@@ -1866,7 +1883,7 @@
     if(cat==='1'){
       el.innerHTML =
         '<div class="cat-title">'+esc(c1.title || 'Oeverloos Gelul')+'</div>'+
-        textBlock(c1.text);
+        textBlock(c1.text, true);
       return;
     }
 
@@ -1891,17 +1908,16 @@
     statsHtml += statBlock('gem. bpm', s.avgHR!=null ? s.avgHR : '—');
     statsHtml += '</div></div>';
 
-    const bitterballenHtml = '';
 
     const chartsHtml = (e.track && e.track.length>1) ? '<div class="charts" id="charts-'+id+'"></div>' : '';
 
     const countersHtml = '<div class="counters">'+
-      statBlock('bitterballen verbrand', s.bitterballen!=null ? s.bitterballen : '—')+
-      statBlock('mooie dingen gezien', esc(c3.mooieDingen || '—'))+
-      statBlock('lekkere dingen gegeten', esc(c3.lekkereDingen || '—'))+
+      counterBlock('flame', 'bitterballen verbrand', s.bitterballen!=null ? s.bitterballen : '—')+
+      counterBlock('eye', 'mooie dingen gezien', esc(c3.mooieDingen || '—'))+
+      counterBlock('food', 'lekkere dingen gegeten', esc(c3.lekkereDingen || '—'))+
       '</div>';
 
-    el.innerHTML = statsHtml + bitterballenHtml + chartsHtml + countersHtml;
+    el.innerHTML = statsHtml + countersHtml + chartsHtml;
 
     if(e.track && e.track.length>1){
       dayChartInstances[id] = renderCharts(id, e.track) || [];
@@ -2039,9 +2055,13 @@
       stagePoints.push([start.lat, start.lon]);
       track.forEach(p=>{ if(p.lat!=null&&p.lon!=null) allBounds.push([p.lat,p.lon]); });
 
+      // The most recent stage gets a warm contrasting line so the newest leg of
+      // the trip reads at a glance against the lilac of everything before it.
+      const isLatest = idx === ids.length - 1;
+      const routeColor = isLatest ? '#C2410C' : '#8670C9';
       const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
-      L.polyline(routeLatLngs, {color:'#fff', weight:8, opacity:0.85}).addTo(map);
-      L.polyline(routeLatLngs, {color:'#8670C9', weight:6, opacity:0.95}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?9:8, opacity:0.85}).addTo(map);
+      L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?7:6, opacity:0.95}).addTo(map);
 
       const e = entries[id];
       const routeLabel = (e.start||'?') + ' → ' + (e.finish||'?');
