@@ -10,10 +10,13 @@
     --lilac:#B9A8E8;
     --lilac-deep:#8670C9;
     --lilac-bg:#F4F1FB;
-    --lilac-line:#E3DCF5;
+    --beige:#D8C39A;
+    --beige-deep:#A6793C;
+    --beige-tint:#F8F1E2;
     --olive:#5B6B36;
     --olive-deep:#414C27;
     --olive-tint:#EEF1E4;
+    --bg:#F7F4EE;
     --card:#FFFFFF;
     --ink:#1C1C1E;
     --secondary:#6E6E73;
@@ -21,11 +24,15 @@
     --track-bg:rgba(120,120,128,0.14);
     --danger:#FF3B30;
     --sep:rgba(60,60,67,0.1);
+    --radius-lg:18px;
+    --radius-md:14px;
+    --gap:14px;
+    --shadow-card:0 1px 4px rgba(0,0,0,0.06);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{
-    background:var(--lilac-bg);
+    background:var(--bg);
     color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
     line-height:1.4;
@@ -72,24 +79,26 @@
     box-shadow:0 1px 3px rgba(0,0,0,0.15);
   }
 
-  .view{display:none;}
-  .view.active{display:block;}
+  /* shared card shell -- consolidates what used to be several near-duplicate
+     card rules (intro-card, titled-card, kpi stat, day, overview-empty, empty) */
+  .intro-card, .titled-card, .kpi-grid .stat, .day, .overview-empty, .empty{
+    background:var(--card);
+    border-radius:var(--radius-lg);
+    padding:18px;
+    margin-bottom:var(--gap);
+    box-shadow:var(--shadow-card);
+  }
 
   /* overview */
   .overview-map{
     height:340px;
     width:100%;
-    border-radius:18px;
+    border-radius:var(--radius-lg);
     background:var(--card);
-    margin-bottom:14px;
+    margin-bottom:var(--gap);
     overflow:hidden;
   }
   .intro-card{
-    background:var(--card);
-    border-radius:18px;
-    padding:18px;
-    margin-bottom:14px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.06);
     font-size:15px;
     line-height:1.5;
     color:var(--ink);
@@ -102,25 +111,18 @@
     display:grid;
     grid-template-columns:1fr 1fr;
     gap:10px;
-    margin-bottom:14px;
+    margin-bottom:var(--gap);
   }
   .kpi-grid .stat{
-    background:var(--card);
-    border-radius:14px;
+    border-radius:var(--radius-md);
     padding:14px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.06);
     min-width:0;
   }
   .kpi-grid .stat .v{font-size:22px;}
   .kpi-grid .stat .l{font-size:11px;}
+  .kpi-icon{width:20px;height:20px;color:var(--lilac-deep);margin-bottom:8px;display:block;}
+  .kpi-icon svg{width:100%;height:100%;}
 
-  .titled-card{
-    background:var(--card);
-    border-radius:18px;
-    padding:18px;
-    margin-bottom:14px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.06);
-  }
   .titled-card .cat-title{margin-bottom:10px;}
   .titled-card .editable-text{
     outline:none;
@@ -134,8 +136,6 @@
   .overview-empty{
     padding:48px 20px;
     text-align:center;
-    background:var(--card);
-    border-radius:18px;
     color:var(--secondary);
     font-size:14px;
   }
@@ -212,26 +212,18 @@
   .empty{
     padding:56px 20px;
     text-align:center;
-    background:var(--card);
-    border-radius:18px;
   }
   .empty h2{font-size:19px;font-weight:700;margin:0 0 6px;}
   .empty p{color:var(--secondary);font-size:14px;margin:0;}
 
   /* day entries */
   .day{
-    background:var(--card);
-    border-radius:18px;
-    padding:18px;
-    margin-bottom:14px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.06);
-    scroll-margin-top:20px;
-    transition:box-shadow 0.4s ease, background 0.4s ease;
+    border-top:4px solid var(--accent, var(--lilac-deep));
   }
-  .day.flash{
-    background:var(--lilac-bg);
-    box-shadow:0 0 0 2px var(--lilac);
-  }
+  .day[data-theme="1"]{--accent:var(--lilac-deep);}
+  .day[data-theme="2"]{--accent:var(--beige-deep);}
+  .day[data-theme="3"]{--accent:var(--olive-deep);}
+  .day .cat-title{color:var(--accent, var(--ink));}
   .day-head{
     display:flex;
     align-items:center;
@@ -294,6 +286,7 @@
   .freetext.empty{color:var(--secondary);}
 
   .day .segmented{margin:14px 0;}
+  .day .segmented button.active{background:var(--accent, var(--lilac-deep));color:#fff;}
   .cat-content{margin-top:2px;}
   .cat-title{font-size:17px;font-weight:700;margin:0 0 10px;color:var(--ink);}
   .cat-sub{margin:0 0 18px;}
@@ -486,6 +479,40 @@
   }
   .photo-preview .ppick.highlight .star{display:block;}
 
+  /* full-screen entry pane */
+  .pane{
+    position:fixed;inset:0;
+    background:var(--bg);
+    display:none;
+    z-index:4000;
+    overflow-y:auto;
+  }
+  .pane.open{display:block;}
+  .pane-header{
+    position:sticky;top:0;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    background:var(--bg);
+    border-bottom:1px solid var(--sep);
+    z-index:1;
+  }
+  .pane-nav{display:flex;gap:8px;}
+  .pane-btn{
+    width:36px;height:36px;
+    border-radius:50%;
+    background:var(--track-bg);
+    color:var(--ink);
+    border:none;
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .pane-btn:disabled{opacity:0.35;cursor:default;}
+  .pane-body{max-width:640px;margin:0 auto;padding:16px 16px 40px;}
+
   /* photo lightbox */
   .lightbox{
     position:fixed;inset:0;
@@ -541,13 +568,9 @@
     <div class="app-subtitle">Vrij associeren op twee wielen</div>
     <div class="sub" id="entryCount">0 reisbewegingen gelogd</div>
     <div class="sub" id="signOutRow" style="display:none;"><button id="signOutBtn" style="background:none;border:none;padding:0;color:var(--lilac-deep);font:inherit;font-weight:600;cursor:pointer;">Ingelogd — uitloggen</button></div>
-    <div class="segmented">
-      <button id="tabOverviewBtn" class="active">Overzicht</button>
-      <button id="tabLogBtn">Logboek</button>
-    </div>
   </header>
 
-  <div id="overviewView" class="view active">
+  <div id="overviewView">
     <div class="intro-card" id="introCard"></div>
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="titled-card" id="dailyCardWrap">
@@ -557,13 +580,20 @@
     <div class="overview-map" id="overviewMap"></div>
     <div class="overview-hint">Tik op een etappe om die reisbeweging te openen.</div>
   </div>
-
-  <div id="logView" class="view">
-    <div id="timeline"></div>
-  </div>
 </div>
 
 <button class="fab" id="addBtn">+</button>
+
+<div class="pane" id="entryPane">
+  <div class="pane-header">
+    <button class="pane-btn" id="paneClose" aria-label="Sluiten">✕</button>
+    <div class="pane-nav">
+      <button class="pane-btn" id="panePrev" aria-label="Vorige etappe">‹</button>
+      <button class="pane-btn" id="paneNext" aria-label="Volgende etappe">›</button>
+    </div>
+  </div>
+  <div class="pane-body" id="entryPaneContent"></div>
+</div>
 
 <div class="overlay" id="passOverlay">
   <div class="sheet">
@@ -1096,6 +1126,20 @@
     return '<div class="stat"><span class="v">'+value+'</span><span class="l">'+label+'</span></div>';
   }
 
+  const KPI_ICONS = {
+    words: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    days: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    food: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v8m-2-8v5a2 2 0 0 0 4 0V2M6 10v12M18 2c-2 1.5-2 5-2 7 0 1.5.9 2 2 2v9"/></svg>',
+    bike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M5.5 17.5 10 8h4l4.5 9.5M10 8 8.5 5h3M12.5 8l3 5"/></svg>',
+    mountain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 20 6-11 4 6 2-3 6 8H3Z"/></svg>',
+    flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s-5 5-5 10a5 5 0 0 0 10 0c0-2-1-3-1-3s-.5 2-2 2c-1 0-1.5-1-1-2 1-2 2-3 2-5-1 1-3 2-3 3s1 2 0 3c-1.5 1-3-1-3-3 0-3 3-5 3-5Z"/></svg>'
+  };
+
+  function kpiBlock(iconKey, label, value){
+    return '<div class="stat"><div class="kpi-icon">'+KPI_ICONS[iconKey]+'</div><span class="v">'+value+'</span><span class="l">'+label+'</span></div>';
+  }
+
   function esc(s){
     const d = document.createElement('div');
     d.textContent = s;
@@ -1149,13 +1193,13 @@
     if(!el) return;
     const k = computeKPIs();
     el.innerHTML =
-      statBlock('woorden oeverloos geluld', k.words) +
-      statBlock('dagen vrij geassocieerd', k.days) +
-      statBlock('mooie dingen gezien', k.mooie) +
-      statBlock('lekkere dingen gegeten', k.lekkere) +
-      statBlock('kilometer gefietst', fmt(k.km,1)) +
-      statBlock('hoogtemeters overbrugd', fmt(k.elev,0)) +
-      statBlock('bitterballen verbrand', k.bb);
+      kpiBlock('words', 'woorden oeverloos geluld', k.words) +
+      kpiBlock('days', 'dagen vrij geassocieerd', k.days) +
+      kpiBlock('eye', 'mooie dingen gezien', k.mooie) +
+      kpiBlock('food', 'lekkere dingen gegeten', k.lekkere) +
+      kpiBlock('bike', 'kilometer gefietst', fmt(k.km,1)) +
+      kpiBlock('mountain', 'hoogtemeters overbrugd', fmt(k.elev,0)) +
+      kpiBlock('flame', 'bitterballen verbrand', k.bb);
   }
 
   const CAT_LABELS = {1:'Oeverloos Gelul', 2:'Vanille Travelblog', 3:'Keiharde Cijfers'};
@@ -1163,95 +1207,133 @@
   let dayChartInstances = {}; // entryId -> [Chart,...]
 
   function renderTimeline(){
-    const container = $('timeline');
-    const ids = orderedIds().slice().reverse(); // newest first in the log
+    const ids = orderedIds();
     $('entryCount').textContent = ids.length + (ids.length===1?' reisbeweging gelogd':' reisbewegingen gelogd');
+    renderKPIs();
+    renderOverview();
+  }
 
-    if(ids.length===0){
-      container.innerHTML = '<div class="empty"><h2>Nog geen reisbewegingen</h2><p>Zodra de eerste dag gelogd is, verschijnt die hier.</p></div>';
-      renderKPIs();
-      renderOverview();
-      return;
-    }
+  // ---------- full-screen entry pane ----------
+  let currentPaneId = null;
 
-    container.innerHTML = '';
+  function teardownPaneInstances(){
     Object.values(dayMapInstances).forEach(m=>{ try{ m.remove(); }catch(e){} });
     dayMapInstances = {};
     Object.values(dayChartInstances).forEach(list=> list.forEach(c=>{ try{ c.destroy(); }catch(e){} }));
     dayChartInstances = {};
+  }
 
-    ids.forEach((id)=>{
-      const e = entries[id];
-      if(!e) return;
-      if(!activeCat[id]) activeCat[id] = '1';
-      const card = document.createElement('div');
-      card.className='day';
-      card.id = 'day-'+id;
-      const dateLabel = e.date ? new Date(e.date+'T12:00:00').toLocaleDateString('nl-NL',{month:'short',day:'numeric',year:'numeric'}) : '';
+  function renderEntryPane(id){
+    const e = entries[id];
+    const body = $('entryPaneContent');
+    if(!e || !body) return;
 
-      const dialHtml = '<div class="segmented" data-dial="'+id+'">'+
-        [1,2,3].map(n=>'<button data-cat="'+n+'" class="'+(activeCat[id]===String(n)?'active':'')+'">'+CAT_LABELS[n]+'</button>').join('')+
-        '</div>';
+    teardownPaneInstances();
+    if(!activeCat[id]) activeCat[id] = '1';
 
-      card.innerHTML =
-        '<div class="day-head">'+
-          '<span class="day-num">'+esc(e.stageTitle||'Naamloze etappe')+'</span>'+
-          '<span class="day-date">'+dateLabel+'</span>'+
-        '</div>'+
-        '<div class="day-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>'+
-        (e.track && e.track.length>1 ? '<div class="map" id="map-'+id+'"></div>' : '')+
-        (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
-        dialHtml+
-        '<div class="cat-content" id="catcontent-'+id+'"></div>'+
-        (editUnlocked ? '<div class="day-actions"><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
+    const card = document.createElement('div');
+    card.className = 'day';
+    card.id = 'day-'+id;
+    card.dataset.theme = activeCat[id];
+    const dateLabel = e.date ? new Date(e.date+'T12:00:00').toLocaleDateString('nl-NL',{month:'short',day:'numeric',year:'numeric'}) : '';
 
-      container.appendChild(card);
+    const dialHtml = '<div class="segmented" data-dial="'+id+'">'+
+      [1,2,3].map(n=>'<button data-cat="'+n+'" class="'+(activeCat[id]===String(n)?'active':'')+'">'+CAT_LABELS[n]+'</button>').join('')+
+      '</div>';
 
-      if(e.track && e.track.length>1){
-        setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
-      }
-      renderCategoryContent(id, activeCat[id]);
-    });
+    card.innerHTML =
+      '<div class="day-head">'+
+        '<span class="day-num">'+esc(e.stageTitle||'Naamloze etappe')+'</span>'+
+        '<span class="day-date">'+dateLabel+'</span>'+
+      '</div>'+
+      '<div class="day-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>'+
+      (e.track && e.track.length>1 ? '<div class="map" id="map-'+id+'"></div>' : '')+
+      (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
+      dialHtml+
+      '<div class="cat-content" id="catcontent-'+id+'"></div>'+
+      (editUnlocked ? '<div class="day-actions"><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
 
-    container.querySelectorAll('.photos img').forEach(img=>{
+    body.innerHTML = '';
+    body.appendChild(card);
+
+    if(e.track && e.track.length>1){
+      setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
+    }
+    renderCategoryContent(id, activeCat[id]);
+
+    card.querySelectorAll('.photos img').forEach(img=>{
       img.addEventListener('click', ()=>{
-        const eid = img.getAttribute('data-entry');
         const idx = parseInt(img.getAttribute('data-idx'), 10);
-        openLightbox(entries[eid].photos, idx);
+        openLightbox(e.photos, idx);
       });
     });
 
-    container.querySelectorAll('[data-dial]').forEach(dial=>{
-      const id = dial.getAttribute('data-dial');
-      dial.querySelectorAll('button').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const cat = btn.getAttribute('data-cat');
-          if(activeCat[id]===cat) return;
-          activeCat[id] = cat;
-          dial.querySelectorAll('button').forEach(b=> b.classList.toggle('active', b===btn));
-          renderCategoryContent(id, cat);
-        });
+    card.querySelectorAll('[data-dial] button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const cat = btn.getAttribute('data-cat');
+        if(activeCat[id]===cat) return;
+        activeCat[id] = cat;
+        card.dataset.theme = cat;
+        card.querySelectorAll('[data-dial] button').forEach(b=> b.classList.toggle('active', b===btn));
+        renderCategoryContent(id, cat);
       });
     });
 
     if(editUnlocked){
-      container.querySelectorAll('[data-del]').forEach(btn=>{
-        btn.addEventListener('click', async ()=>{
+      const delBtn = card.querySelector('[data-del]');
+      if(delBtn){
+        delBtn.addEventListener('click', async ()=>{
           if(!confirm('Deze reisbeweging verwijderen? Dit kan niet ongedaan worden gemaakt.')) return;
-          const id = btn.getAttribute('data-del');
           manifest.entryIds = manifest.entryIds.filter(x=>x!==id);
           await saveManifest(manifest);
           await deleteEntryData(id);
           delete entries[id];
           delete activeCat[id];
+          closeEntryPane();
           renderTimeline();
         });
-      });
+      }
     }
 
-    renderKPIs();
-    renderOverview();
+    updatePaneNav();
   }
+
+  function updatePaneNav(){
+    const ids = orderedIds();
+    const idx = ids.indexOf(currentPaneId);
+    $('panePrev').disabled = idx<=0;
+    $('paneNext').disabled = idx===-1 || idx>=ids.length-1;
+  }
+
+  function openEntryPane(id){
+    if(!entries[id]) return;
+    currentPaneId = id;
+    renderEntryPane(id);
+    $('entryPane').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeEntryPane(){
+    $('entryPane').classList.remove('open');
+    document.body.style.overflow = '';
+    teardownPaneInstances();
+    currentPaneId = null;
+  }
+
+  $('paneClose').addEventListener('click', closeEntryPane);
+  $('panePrev').addEventListener('click', ()=>{
+    const ids = orderedIds();
+    const idx = ids.indexOf(currentPaneId);
+    if(idx>0) openEntryPane(ids[idx-1]);
+  });
+  $('paneNext').addEventListener('click', ()=>{
+    const ids = orderedIds();
+    const idx = ids.indexOf(currentPaneId);
+    if(idx>=0 && idx<ids.length-1) openEntryPane(ids[idx+1]);
+  });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='Escape' && $('entryPane').classList.contains('open')) closeEntryPane();
+  });
 
   function textBlock(text){
     const t = (text||'').trim();
@@ -1480,37 +1562,8 @@
     }
   }
 
-  function switchTab(tab){
-    const overviewActive = tab==='overview';
-    $('tabOverviewBtn').classList.toggle('active', overviewActive);
-    $('tabLogBtn').classList.toggle('active', !overviewActive);
-    $('overviewView').classList.toggle('active', overviewActive);
-    $('logView').classList.toggle('active', !overviewActive);
-    if(overviewActive && overviewMapInstance){
-      setTimeout(()=> overviewMapInstance.invalidateSize(), 50);
-    }
-    if(!overviewActive){
-      setTimeout(()=>{
-        Object.values(dayMapInstances).forEach(m=>{
-          if(!m) return;
-          m.invalidateSize();
-          if(m._routeBounds) m.fitBounds(m._routeBounds, {padding:[16,16]});
-        });
-      }, 50);
-    }
-  }
-  $('tabOverviewBtn').addEventListener('click', ()=>switchTab('overview'));
-  $('tabLogBtn').addEventListener('click', ()=>switchTab('log'));
-
   function goToEntry(id){
-    switchTab('log');
-    setTimeout(()=>{
-      const el = $('day-'+id);
-      if(!el) return;
-      el.scrollIntoView({behavior:'smooth', block:'start'});
-      el.classList.add('flash');
-      setTimeout(()=> el.classList.remove('flash'), 1500);
-    }, 80);
+    openEntryPane(id);
   }
 
   // ---------- sign-in flow (Firebase Auth — only the owner's account can write) ----------
@@ -1772,7 +1825,7 @@
   // ---------- init ----------
   async function init(){
     if(!firebaseReady){
-      $('timeline').innerHTML = '<div class="loading-msg">Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.</div>';
+      showErrorBanner('Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.');
       manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
       renderOverview();
       return;
@@ -1788,7 +1841,7 @@
       console.error('manifest load/save failed', err);
       manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
       const detail = (err && (err.message || err.toString())) || 'onbekende fout';
-      $('timeline').innerHTML = '<div class="loading-msg">Opslagfout bij het laden: '+esc(detail)+'</div>';
+      showErrorBanner('Opslagfout bij het laden: '+detail);
     }
 
     renderIntroCard();
