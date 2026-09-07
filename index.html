@@ -283,6 +283,60 @@
   }
   .kpi.hero-stat .l{font-size:var(--t-caps);}
 
+  /* ---------- e-mailupdates ---------- */
+  .subscribe{
+    background:var(--ground-paper);
+    border-radius:var(--r-lg);
+    padding:var(--s6) var(--s5);
+    text-align:center;
+  }
+  .subscribe-title{
+    font-family:var(--font-display);
+    font-size:var(--t-h2);
+    font-weight:700;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+    margin-bottom:var(--s2);
+  }
+  .subscribe-sub{
+    font-size:var(--t-small);
+    color:var(--ink-soft);
+    line-height:1.5;
+    margin:0 auto var(--s5);
+    max-width:34ch;
+  }
+  .subscribe-form{
+    display:flex;
+    gap:var(--s2);
+    max-width:420px;
+    margin:0 auto;
+  }
+  .subscribe-form input{
+    flex:1;
+    min-width:0;
+    font-family:var(--font-body);
+    font-size:16px;
+    padding:var(--s3);
+    border:1px solid var(--sep);
+    border-radius:var(--r-md);
+    background:var(--surface);
+    color:var(--ink);
+  }
+  .subscribe-form .btn{white-space:nowrap;}
+  .subscribe-msg{
+    display:none;
+    margin-top:var(--s3);
+    font-size:var(--t-small);
+    line-height:1.5;
+  }
+  .subscribe-msg.ok{display:block;color:var(--olive-deep);}
+  .subscribe-msg.err{display:block;color:var(--danger);}
+
+  @media (max-width:420px){
+    .subscribe-form{flex-direction:column;}
+    .subscribe-form .btn{width:100%;}
+  }
+
   /* ---------- 5. stage list ---------- */
   .stage-list{display:flex;flex-direction:column;gap:var(--s4);}
   .stage-card{
@@ -1131,6 +1185,24 @@
     </div>
   </section>
 
+  <section class="section" id="subscribeSection" style="display:none;">
+    <div class="section-inner">
+      <div class="subscribe">
+        <div class="subscribe-title">Blijf op de hoogte</div>
+        <p class="subscribe-sub">Krijg een mailtje zodra er een nieuwe reisbeweging online staat. Geen gezeur, alleen etappes.</p>
+        <form class="subscribe-form" id="subscribeForm" method="post" target="bdFrame">
+          <input type="email" id="subscribeEmail" name="email" placeholder="jouw@email.nl" autocomplete="email" required>
+          <input type="hidden" name="embed" value="1">
+          <button class="btn primary" type="submit" id="subscribeBtn">Aanmelden</button>
+        </form>
+        <div class="subscribe-msg" id="subscribeMsg"></div>
+      </div>
+      <!-- Posting into a hidden iframe keeps the visitor on the page instead of
+           being thrown onto Buttondown's own confirmation screen. -->
+      <iframe name="bdFrame" id="bdFrame" title="aanmelden" style="display:none;"></iframe>
+    </div>
+  </section>
+
   <section class="section" id="stagesSection">
     <div class="section-inner">
       <div class="section-label">Etappes</div>
@@ -1304,6 +1376,13 @@
     messagingSenderId: "1071275045470",
     appId: "1:1071275045470:web:0910978e897e8fb42d3acf"
   };
+
+  // ---------- e-mailupdates (Buttondown) ----------
+  // Zet hier je Buttondown-gebruikersnaam neer om het aanmeldformulier aan te
+  // zetten, bijv. 'oeverloosgelul'. Zolang dit leeg is wordt het hele blok
+  // verborgen, zodat er nooit een half werkend formulier online staat.
+  // Je vindt de naam in Buttondown onder Settings > Basics > username.
+  const BUTTONDOWN_USER = '';
 
   let db = null;
   let auth = null;
@@ -2852,8 +2931,45 @@
     }
   }
 
+  // ---------- e-mailupdates ----------
+  // The form posts straight to Buttondown, so no address ever touches this
+  // site's own storage -- confirmation, unsubscribe and GDPR handling all stay
+  // on their side. The response lands in a hidden cross-origin iframe we can't
+  // read, so success here means "delivered to Buttondown", and the real
+  // confirmation is the double opt-in mail they send.
+  function setupSubscribe(){
+    const section = $('subscribeSection');
+    const form = $('subscribeForm');
+    if(!section || !form) return;
+
+    const user = (BUTTONDOWN_USER || '').trim();
+    if(!user) return; // stays hidden until configured
+
+    form.action = 'https://buttondown.com/api/emails/embed-subscribe/' + encodeURIComponent(user);
+    section.style.display = '';
+
+    const msg = $('subscribeMsg');
+    const input = $('subscribeEmail');
+    const btn = $('subscribeBtn');
+
+    // Only fires once the browser's own validation (required + type=email) has
+    // passed, so by this point the address is well-formed and the POST is
+    // already on its way to the iframe.
+    form.addEventListener('submit', ()=>{
+      msg.className = 'subscribe-msg ok';
+      msg.textContent = 'Bijna klaar — check je mail en bevestig je aanmelding.';
+      btn.disabled = true;
+      setTimeout(()=>{
+        input.value = '';
+        btn.disabled = false;
+      }, 1500);
+    });
+  }
+
   // ---------- init ----------
   async function init(){
+    setupSubscribe(); // independent of Firebase, so it works even if that fails
+
     if(!firebaseReady){
       showErrorBanner('Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.');
       manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
