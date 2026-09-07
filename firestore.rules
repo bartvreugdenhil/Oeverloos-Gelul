@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// Firestore security rules for Oeverloos Gelul.
+//
+// Paste this into: Firebase console > Firestore Database > Rules > Publish.
+//
+// !! Replace OWNER_UID below with your own account's uid. It is the same uid
+// !! already hardcoded in your current rules -- copy it from there.
+//
+// Reading is public (anyone with the link can view the trip).
+// Writing is split in two:
+//   - trip content (manifest + entries) : owner only
+//   - likes + comments                  : any signed-in visitor, but only
+//                                         their own, and only in a fixed shape
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner() {
+      return request.auth != null && request.auth.uid == 'OWNER_UID';
+    }
+
+    // ---------- trip content: owner writes only ----------
+    match /tripdata/{doc} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    match /entries/{entryId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // ---------- likes ----------
+    // Document id is deliberately "<entryId>__<uid>" so one visitor can only
+    // ever hold a single like per stage -- the uniqueness is enforced by the
+    // key itself, not by a query we would have to trust.
+    match /likes/{likeId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['entryId', 'uid', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.entryId is string
+        && request.resource.data.entryId.size() > 0
+        && request.resource.data.entryId.size() <= 128
+        && request.resource.data.ts is number
+        && likeId == request.resource.data.entryId + '__' + request.auth.uid;
+
+      // Only unlike your own like (or the owner clearing up).
+      allow delete: if request.auth != null
+        && (resource.data.uid == request.auth.uid || isOwner());
+
+      allow update: if false;
+    }
+
+    // ---------- comments ----------
+    match /comments/{commentId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['entryId', 'uid', 'name', 'text', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.entryId is string
+        && request.resource.data.entryId.size() > 0
+        && request.resource.data.entryId.size() <= 128
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.ts is number;
+
+      // A commenter can remove their own; the owner can remove anything.
+      allow delete: if request.auth != null
+        && (resource.data.uid == request.auth.uid || isOwner());
+
+      // No edits -- an edited comment can't be distinguished from a hijacked
+      // one, and nothing in the UI needs it.
+      allow update: if false;
+    }
+
+    // Anything not matched above stays closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

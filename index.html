@@ -658,6 +658,154 @@
     flex-shrink:0;
   }
 
+  /* ---------- likes & comments ---------- */
+  .social{
+    margin-top:var(--s6);
+    padding-top:var(--s5);
+    border-top:1px solid var(--sep);
+  }
+  .social-bar{
+    display:flex;
+    align-items:center;
+    gap:var(--s4);
+    margin-bottom:var(--s5);
+  }
+  .like-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:var(--s2);
+    font-family:var(--font-body);
+    font-size:var(--t-body);
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    background:var(--control-bg);
+    border:none;
+    border-radius:var(--r-full);
+    padding:var(--s2) var(--s4);
+    cursor:pointer;
+    transition:transform 0.12s ease, background 0.12s ease;
+  }
+  .like-btn svg{width:19px;height:19px;display:block;}
+  .like-btn.liked{background:var(--accent);color:var(--ink-invert);}
+  .like-btn:active{transform:scale(0.94);}
+  .like-btn:disabled{opacity:0.45;cursor:default;}
+  .social-count{
+    display:inline-flex;
+    align-items:center;
+    gap:var(--s2);
+    font-size:var(--t-small);
+    font-weight:700;
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .social-count svg{width:17px;height:17px;display:block;}
+  .social-title{
+    font-size:var(--t-caps);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.09em;
+    color:var(--ink-soft);
+    margin:0 0 var(--s3);
+  }
+  .comment-list{display:flex;flex-direction:column;gap:var(--s3);}
+  .comment{
+    background:var(--surface);
+    border-radius:var(--r-md);
+    padding:var(--s3) var(--s4);
+    box-shadow:var(--shadow-card);
+  }
+  .comment-head{
+    display:flex;
+    align-items:baseline;
+    gap:var(--s2);
+    margin-bottom:var(--s1);
+  }
+  .comment-name{font-size:var(--t-small);font-weight:700;color:var(--ink);}
+  .comment-time{font-size:var(--t-caps);color:var(--ink-soft);}
+  .comment-del{
+    margin-left:auto;
+    background:none;border:none;
+    color:var(--ink-soft);
+    font-size:var(--t-caps);
+    cursor:pointer;
+    padding:0 var(--s1);
+    line-height:1;
+  }
+  .comment-del:hover{color:var(--danger);}
+  .comment-text{
+    font-family:var(--font-display);
+    font-size:var(--t-h3);
+    line-height:1.5;
+    color:var(--ink);
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .comment-empty{
+    font-size:var(--t-small);
+    color:var(--ink-soft);
+    font-style:italic;
+  }
+  .comment-form{margin-top:var(--s4);display:flex;flex-direction:column;gap:var(--s2);}
+  .comment-form input,
+  .comment-form textarea{
+    width:100%;
+    font-family:var(--font-body);
+    font-size:16px;
+    padding:var(--s3);
+    border:1px solid var(--sep);
+    border-radius:var(--r-md);
+    background:var(--surface);
+    color:var(--ink);
+  }
+  .comment-form textarea{
+    min-height:84px;
+    resize:vertical;
+    font-family:var(--font-display);
+    line-height:1.5;
+  }
+  .comment-form .btn{align-self:flex-end;}
+  .comment-err{
+    display:none;
+    color:var(--danger);
+    font-size:var(--t-small);
+  }
+
+  /* like/comment counts on the overview stage cards */
+  .stage-social{
+    display:flex;
+    gap:var(--s4);
+    margin-top:var(--s3);
+    padding-top:var(--s3);
+    border-top:1px solid var(--sep);
+  }
+  .stage-social span{
+    display:inline-flex;
+    align-items:center;
+    gap:var(--s1);
+    font-size:var(--t-small);
+    font-weight:700;
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .stage-social svg{width:15px;height:15px;display:block;}
+  .stage-social span:first-child{color:var(--accent);}
+
+  /* "nieuw sinds je vorige bezoek" */
+  .stage-new{
+    position:absolute;
+    top:var(--s3);right:var(--s3);
+    background:#C2410C;
+    color:var(--ink-invert);
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:0.09em;
+    text-transform:uppercase;
+    padding:var(--s1) var(--s2);
+    border-radius:var(--r-sm);
+  }
+  .stage-card.is-new{box-shadow:0 0 0 2px #C2410C, var(--shadow-card);}
+
   .day-actions{
     margin-top:var(--s6);
     padding-top:var(--s4);
@@ -1182,6 +1330,20 @@
   let existingTrackData = null; // {stats, track} kept from an entry being edited, unless replaced
   let overviewMapInstance = null;
   let dayMapInstances = {};
+  let visitorUid = null;      // anonymous auth uid, used for likes/comments
+  let likesByEntry = {};      // entryId -> [uid, ...]
+  let commentsByEntry = {};   // entryId -> [{id, uid, name, text, ts}, ...]
+  let seenIds = [];           // entry ids this visitor has already seen
+
+  const SEEN_KEY = 'og_seen_entry_ids';
+  const NAME_KEY = 'og_visitor_name';
+
+  function lsGet(key){
+    try{ return localStorage.getItem(key); }catch(e){ return null; }
+  }
+  function lsSet(key, value){
+    try{ localStorage.setItem(key, value); }catch(e){}
+  }
 
   const $ = (id) => document.getElementById(id);
 
@@ -1202,6 +1364,75 @@
   }
   async function deleteEntryData(id){
     await db.collection('entries').doc(id).delete();
+  }
+
+  // ---------- likes & comments ----------
+  // Kept in their own top-level collections rather than on the entry doc:
+  // entry docs already carry base64 photos and sit close to Firestore's 1MB
+  // per-document ceiling, so appending to them would eventually start failing.
+  // Both are fetched in a single query each, so page load costs 2 reads total
+  // regardless of how many stages exist.
+  async function loadSocial(){
+    likesByEntry = {};
+    commentsByEntry = {};
+    try{
+      const [likeSnap, commentSnap] = await Promise.all([
+        db.collection('likes').get(),
+        db.collection('comments').get()
+      ]);
+      likeSnap.forEach(doc=>{
+        const d = doc.data();
+        if(!d || !d.entryId) return;
+        (likesByEntry[d.entryId] = likesByEntry[d.entryId] || []).push(d.uid);
+      });
+      commentSnap.forEach(doc=>{
+        const d = doc.data();
+        if(!d || !d.entryId) return;
+        (commentsByEntry[d.entryId] = commentsByEntry[d.entryId] || []).push(
+          Object.assign({}, d, {id: doc.id})
+        );
+      });
+      Object.values(commentsByEntry).forEach(list=>
+        list.sort((a,b)=> (a.ts||0) - (b.ts||0))
+      );
+    }catch(err){
+      console.error('social load failed', err);
+    }
+  }
+
+  function likeDocId(entryId){ return entryId + '__' + visitorUid; }
+
+  async function toggleLike(entryId){
+    if(!visitorUid) return;
+    const liked = (likesByEntry[entryId]||[]).indexOf(visitorUid) !== -1;
+    const ref = db.collection('likes').doc(likeDocId(entryId));
+    if(liked){
+      await ref.delete();
+      likesByEntry[entryId] = (likesByEntry[entryId]||[]).filter(u=>u!==visitorUid);
+    } else {
+      await ref.set({entryId: entryId, uid: visitorUid, ts: Date.now()});
+      (likesByEntry[entryId] = likesByEntry[entryId] || []).push(visitorUid);
+    }
+  }
+
+  async function addComment(entryId, name, text){
+    if(!visitorUid) return;
+    const doc = {
+      entryId: entryId,
+      uid: visitorUid,
+      name: name.slice(0,60),
+      text: text.slice(0,1000),
+      ts: Date.now()
+    };
+    const ref = await db.collection('comments').add(doc);
+    (commentsByEntry[entryId] = commentsByEntry[entryId] || []).push(
+      Object.assign({}, doc, {id: ref.id})
+    );
+  }
+
+  async function deleteComment(entryId, commentId){
+    await db.collection('comments').doc(commentId).delete();
+    commentsByEntry[entryId] = (commentsByEntry[entryId]||[]).filter(c=>c.id!==commentId);
   }
 
   // ---------- geo / parsing helpers ----------
@@ -1572,6 +1803,12 @@
     '</div>';
   }
 
+  const SOCIAL_ICONS = {
+    heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
+    heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
+    comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z"/></svg>'
+  };
+
   const FAB_ICONS = {
     login: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>'
@@ -1667,9 +1904,49 @@
     hero.classList.toggle('no-photo', !heroPhoto);
   }
 
+  // ---------- "nieuw sinds je vorige bezoek" ----------
+  // Tracks which entry ids a visitor has already seen rather than comparing a
+  // last-visit timestamp against the entry's date: a stage is usually logged a
+  // day or two after the ride it describes, so its date is often already in the
+  // past when it first appears and a timestamp check would never flag it.
+  function loadSeenIds(){
+    const raw = lsGet(SEEN_KEY);
+    if(raw === null){
+      // First ever visit -- treat everything as already seen, so a newcomer
+      // isn't met with every single stage shouting NIEUW.
+      seenIds = orderedIds();
+      saveSeenIds();
+      return;
+    }
+    try{
+      const parsed = JSON.parse(raw);
+      seenIds = Array.isArray(parsed) ? parsed : [];
+    }catch(e){
+      seenIds = [];
+    }
+  }
+  function saveSeenIds(){ lsSet(SEEN_KEY, JSON.stringify(seenIds)); }
+  function isNewEntry(id){ return seenIds.indexOf(id) === -1; }
+  function markSeen(id){
+    if(isNewEntry(id)){
+      seenIds.push(id);
+      saveSeenIds();
+    }
+  }
+
   // ---------- stage list ----------
   function stageStat(label, value){
     return '<span>'+value+'<i>'+label+'</i></span>';
+  }
+
+  function socialCounts(id){
+    const likes = (likesByEntry[id]||[]).length;
+    const comments = (commentsByEntry[id]||[]).length;
+    if(!likes && !comments) return '';
+    let out = '<div class="stage-social">';
+    if(likes) out += '<span>'+SOCIAL_ICONS.heartFilled+likes+'</span>';
+    if(comments) out += '<span>'+SOCIAL_ICONS.comment+comments+'</span>';
+    return out + '</div>';
   }
 
   function renderStageList(){
@@ -1698,16 +1975,18 @@
       if(s.movingMin!=null) stats += stageStat('onderweg', fmtDuration(s.movingMin));
       if(s.bitterballen!=null) stats += stageStat('bitterballen', s.bitterballen);
 
-      return '<button class="stage-card" data-stage="'+esc(id)+'">'+
+      return '<button class="stage-card'+(isNewEntry(id)?' is-new':'')+'" data-stage="'+esc(id)+'">'+
         '<div class="stage-photo'+(photo?'':' no-photo')+'"'+
           (photo ? ' style="background-image:url(\''+photo+'\')"' : '')+'>'+
           '<span class="stage-index">Etappe '+String(idx+1).padStart(2,'0')+'</span>'+
+          (isNewEntry(id) ? '<span class="stage-new">Nieuw</span>' : '')+
         '</div>'+
         '<div class="stage-body">'+
           '<div class="stage-date">'+esc(dateLabel)+'</div>'+
           '<div class="stage-title">'+esc(e.stageTitle||'Naamloze etappe')+'</div>'+
           '<div class="stage-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>'+
           (stats ? '<div class="stage-stats">'+stats+'</div>' : '')+
+          socialCounts(id)+
         '</div>'+
       '</button>';
     }).join('');
@@ -1771,10 +2050,12 @@
       (e.track && e.track.length>1 ? '<div class="map" id="map-'+id+'"></div>' : '')+
       dialHtml+
       '<div class="cat-content" id="catcontent-'+id+'"></div>'+
+      '<div class="social" id="social-'+id+'"></div>'+
       (editUnlocked ? '<div class="day-actions"><button data-edit="'+id+'">Bewerk reisbeweging</button><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
 
     body.innerHTML = '';
     body.appendChild(card);
+    renderSocial(id);
 
     if(e.track && e.track.length>1){
       setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
@@ -1822,6 +2103,121 @@
     updatePaneNav();
   }
 
+  // ---------- likes & comments UI ----------
+  function relTime(ts){
+    if(!ts) return '';
+    const diff = Date.now() - ts;
+    const min = Math.round(diff/60000);
+    if(min < 1) return 'zojuist';
+    if(min < 60) return min + ' min geleden';
+    const hrs = Math.round(min/60);
+    if(hrs < 24) return hrs + (hrs===1 ? ' uur geleden' : ' uur geleden');
+    const days = Math.round(hrs/24);
+    if(days < 7) return days + (days===1 ? ' dag geleden' : ' dagen geleden');
+    return new Date(ts).toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
+  }
+
+  function renderSocial(id){
+    const el = $('social-'+id);
+    if(!el) return;
+
+    const likes = likesByEntry[id] || [];
+    const liked = visitorUid && likes.indexOf(visitorUid) !== -1;
+    const comments = commentsByEntry[id] || [];
+    const savedName = lsGet(NAME_KEY) || '';
+
+    const commentsHtml = comments.length
+      ? comments.map(c=>{
+          const mine = visitorUid && c.uid === visitorUid;
+          const canDelete = mine || editUnlocked;
+          return '<div class="comment">'+
+            '<div class="comment-head">'+
+              '<span class="comment-name">'+esc(c.name || 'Anoniem')+'</span>'+
+              '<span class="comment-time">'+esc(relTime(c.ts))+'</span>'+
+              (canDelete ? '<button class="comment-del" data-comment="'+esc(c.id)+'" aria-label="Verwijder reactie">✕</button>' : '')+
+            '</div>'+
+            '<div class="comment-text">'+esc(c.text || '')+'</div>'+
+          '</div>';
+        }).join('')
+      : '<div class="comment-empty">Nog geen reacties — wees de eerste.</div>';
+
+    el.innerHTML =
+      '<div class="social-bar">'+
+        '<button class="like-btn'+(liked?' liked':'')+'" data-like="'+esc(id)+'"'+(visitorUid?'':' disabled')+'>'+
+          (liked ? SOCIAL_ICONS.heartFilled : SOCIAL_ICONS.heart)+
+          '<span>'+likes.length+'</span>'+
+        '</button>'+
+        '<span class="social-count">'+SOCIAL_ICONS.comment+comments.length+'</span>'+
+      '</div>'+
+      '<h4 class="social-title">Reacties</h4>'+
+      '<div class="comment-list">'+commentsHtml+'</div>'+
+      '<div class="comment-form">'+
+        '<input type="text" id="cName-'+id+'" placeholder="Je naam" maxlength="60" value="'+esc(savedName)+'">'+
+        '<textarea id="cText-'+id+'" placeholder="Schrijf een reactie…" maxlength="1000"></textarea>'+
+        '<div class="comment-err" id="cErr-'+id+'"></div>'+
+        '<button class="btn primary" id="cSend-'+id+'"'+(visitorUid?'':' disabled')+'>Plaatsen</button>'+
+      '</div>';
+
+    const likeBtn = el.querySelector('[data-like]');
+    if(likeBtn){
+      likeBtn.addEventListener('click', async ()=>{
+        likeBtn.disabled = true;
+        try{
+          await toggleLike(id);
+          renderSocial(id);
+          renderStageList();
+        }catch(err){
+          console.error('like failed', err);
+          likeBtn.disabled = false;
+          showSocialError(id, 'Liken lukte niet. Staan de Firestore-regels goed?');
+        }
+      });
+    }
+
+    el.querySelectorAll('[data-comment]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm('Deze reactie verwijderen?')) return;
+        try{
+          await deleteComment(id, btn.getAttribute('data-comment'));
+          renderSocial(id);
+          renderStageList();
+        }catch(err){
+          console.error('comment delete failed', err);
+          showSocialError(id, 'Verwijderen lukte niet.');
+        }
+      });
+    });
+
+    const sendBtn = $('cSend-'+id);
+    if(sendBtn){
+      sendBtn.addEventListener('click', async ()=>{
+        const nameEl = $('cName-'+id), textEl = $('cText-'+id);
+        const name = nameEl.value.trim();
+        const text = textEl.value.trim();
+        if(!text){ showSocialError(id, 'Schrijf eerst een reactie.'); return; }
+        if(!name){ showSocialError(id, 'Vul je naam in.'); return; }
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Bezig…';
+        try{
+          lsSet(NAME_KEY, name);
+          await addComment(id, name, text);
+          renderSocial(id);
+          renderStageList();
+        }catch(err){
+          console.error('comment failed', err);
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'Plaatsen';
+          showSocialError(id, 'Plaatsen lukte niet. Staan de Firestore-regels goed?');
+        }
+      });
+    }
+  }
+
+  function showSocialError(id, msg){
+    const el = $('cErr-'+id);
+    if(el){ el.textContent = msg; el.style.display = 'block'; }
+  }
+
   function updatePaneNav(){
     const ids = orderedIds();
     const idx = ids.indexOf(currentPaneId);
@@ -1832,9 +2228,13 @@
   function openEntryPane(id){
     if(!entries[id]) return;
     currentPaneId = id;
+    const wasNew = isNewEntry(id);
+    markSeen(id);
     renderEntryPane(id);
     $('entryPane').classList.add('open');
     document.body.style.overflow = 'hidden';
+    // Opening a stage clears its NIEUW badge behind the pane.
+    if(wasNew) renderStageList();
   }
 
   function closeEntryPane(){
@@ -2197,7 +2597,12 @@
   $('passInput').addEventListener('keydown', (e)=>{
     if(e.key==='Enter') $('passSubmit').click();
   });
-  $('signOutBtn').addEventListener('click', ()=> auth.signOut());
+  $('signOutBtn').addEventListener('click', ()=>{
+    // Allow a fresh anonymous session afterwards, so signing out drops you
+    // back to being an ordinary visitor who can still like and comment.
+    anonAttempted = false;
+    auth.signOut();
+  });
 
   // ---------- entry form ----------
   let highlightIdx = 0;
@@ -2391,6 +2796,7 @@
       if(!manifest.entryIds.includes(id)) manifest.entryIds.push(id);
       await saveManifest(manifest);
       entries[id] = entry;
+      markSeen(id); // the author shouldn't see their own post flagged NIEUW
 
       closeEntryOverlay();
       renderTimeline();
@@ -2416,8 +2822,34 @@
 
   if(auth){
     auth.onAuthStateChanged(user=>{
-      if(user) onSignedIn(); else onSignedOut();
+      // Visitors are signed in too, anonymously, so "is there a user" is no
+      // longer the same question as "is this the owner". Only a real
+      // (non-anonymous) account unlocks editing.
+      const isOwner = !!user && !user.isAnonymous;
+      visitorUid = user ? user.uid : null;
+      if(isOwner) onSignedIn(); else onSignedOut();
+      if(!user){
+        ensureVisitorSession();
+      } else if(currentPaneId && $('social-'+currentPaneId)){
+        // uid arrived after the pane was already on screen
+        renderSocial(currentPaneId);
+      }
     });
+  }
+
+  // Gives every visitor a stable uid so likes can be deduplicated per person
+  // and comment writes can be constrained by security rules. Silent -- no
+  // sign-up, no prompt. Failure is non-fatal: the site still reads fine, the
+  // like/comment controls just stay disabled.
+  let anonAttempted = false;
+  async function ensureVisitorSession(){
+    if(!auth || anonAttempted) return;
+    anonAttempted = true;
+    try{
+      await auth.signInAnonymously();
+    }catch(err){
+      console.warn('anonymous sign-in unavailable — likes/comments disabled', err.code || err);
+    }
   }
 
   // ---------- init ----------
@@ -2454,6 +2886,10 @@
         console.error('entry load failed', id, err);
       }
     }
+
+    await loadSocial();
+    loadSeenIds(); // needs entries loaded, to seed a first-time visitor
+
     renderTimeline();
   }
 
