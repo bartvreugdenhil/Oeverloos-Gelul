@@ -621,6 +621,33 @@
   }
   .leaflet-container{background:var(--placeholder-bg);font-family:var(--font-body);}
 
+  /* basemap switcher, restyled off the design tokens */
+  .leaflet-control-layers{
+    border-radius:var(--r-md)!important;
+    border:none!important;
+    box-shadow:var(--shadow-lift)!important;
+  }
+  .leaflet-control-layers-toggle{
+    width:34px!important;height:34px!important;
+    background-size:20px 20px!important;
+  }
+  .leaflet-control-layers-expanded{
+    padding:var(--s3) var(--s4) var(--s3) var(--s3)!important;
+    background:var(--surface)!important;
+    color:var(--ink)!important;
+    font-family:var(--font-body)!important;
+    font-size:var(--t-small)!important;
+    font-weight:600!important;
+  }
+  .leaflet-control-layers-expanded label{
+    display:flex;
+    align-items:center;
+    gap:var(--s2);
+    margin:var(--s1) 0;
+    cursor:pointer;
+  }
+  .leaflet-control-layers-selector{margin:0!important;accent-color:var(--accent);}
+
   .freetext{
     font-family:var(--font-display);
     font-size:var(--t-h3);
@@ -2463,6 +2490,69 @@
     return charts;
   }
 
+  // ---------- basemaps ----------
+  // All three are key-free and watermark-free. maxNativeZoom caps where a
+  // provider actually stops producing tiles (OpenTopoMap ends at 17), so
+  // Leaflet upscales instead of showing grey squares past that point.
+  const BASEMAPS = {
+    satelliet: {
+      label: 'Satelliet',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        attribution: 'Tegels &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics'
+      }
+    },
+    fiets: {
+      label: 'Fietskaart',
+      url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 19,
+        subdomains: 'abc',
+        attribution: '&copy; OpenStreetMap | tegels: CyclOSM'
+      }
+    },
+    terrein: {
+      label: 'Terrein',
+      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 19,
+        maxNativeZoom: 17,
+        subdomains: 'abc',
+        attribution: '&copy; OpenStreetMap, SRTM | tegels: OpenTopoMap (CC-BY-SA)'
+      }
+    }
+  };
+
+  // Adds every basemap plus a switcher, activating either the visitor's saved
+  // preference or the given default. The choice is remembered per context, so
+  // overview and stage maps keep their own (deliberately different) defaults
+  // until the visitor overrides them.
+  function addBasemaps(map, el, defaultKey, prefKey){
+    const stored = lsGet(prefKey);
+    const activeKey = BASEMAPS[stored] ? stored : defaultKey;
+
+    const options = {};
+    let activeLayer = null;
+    Object.keys(BASEMAPS).forEach(key=>{
+      const def = BASEMAPS[key];
+      const layer = L.tileLayer(def.url, def.options);
+      options[def.label] = layer;
+      if(key === activeKey) activeLayer = layer;
+    });
+
+    addTileFailNote(el, map)(activeLayer);
+    activeLayer.addTo(map);
+    L.control.layers(options, null, {collapsed:true}).addTo(map);
+
+    map.on('baselayerchange', (e)=>{
+      const key = Object.keys(BASEMAPS).filter(k=> BASEMAPS[k].label === e.name)[0];
+      if(key) lsSet(prefKey, key);
+    });
+
+    return activeLayer;
+  }
+
   function addTileFailNote(el, map){
     let tilesOk = false, tilesFailed = 0;
     return function attach(tiles){
@@ -2472,7 +2562,7 @@
         if(!tilesOk && tilesFailed > 3 && !el.querySelector('.overview-tile-note')){
           const note = document.createElement('div');
           note.className = 'overview-tile-note';
-          note.textContent = 'Kaartmateriaal laadt zodra de site online staat — pins en routes werken hier al wel.';
+          note.textContent = 'Kaartmateriaal laadt niet — pins en routes werken wel.';
           el.style.position = 'relative';
           el.appendChild(note);
         }
@@ -2486,9 +2576,9 @@
     const map = L.map(el, {zoomControl:true, attributionControl:true, scrollWheelZoom:false});
     const latlngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
     if(latlngs.length<2) return;
-    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
-    addTileFailNote(el, map)(tiles);
-    tiles.addTo(map);
+    // Cycling map by default here: on an individual stage the reader wants to
+    // see which roads and climbs the route actually used.
+    addBasemaps(map, el, 'fiets', 'og_base_stage');
     L.polyline(latlngs, {color:'#fff', weight:9, opacity:0.9}).addTo(map);
     const line = L.polyline(latlngs, {color:'#8670C9', weight:7, opacity:0.95}).addTo(map);
     map._routeBounds = line.getBounds();
@@ -2514,9 +2604,9 @@
 
     const map = L.map(el, {zoomControl:true, attributionControl:true});
     overviewMapInstance = map;
-    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
-    addTileFailNote(el, map)(tiles);
-    tiles.addTo(map);
+    // Satellite by default here: the overview's job is "look where in the world
+    // this trip is", which imagery sells far better than a road map.
+    addBasemaps(map, el, 'satelliet', 'og_base_overview');
 
     const stagePoints = [];
     const allBounds = [];
