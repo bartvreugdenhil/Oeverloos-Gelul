@@ -43,6 +43,7 @@
   }
   header.top h1[contenteditable="true"]{outline:none;}
   header.top .sub{color:var(--secondary);font-size:15px;margin-bottom:16px;}
+  .app-subtitle{color:var(--secondary);font-size:16px;font-style:italic;margin:0 0 14px;}
 
   /* segmented control */
   .segmented{
@@ -83,6 +84,19 @@
     margin-bottom:14px;
     overflow:hidden;
   }
+  .intro-card{
+    background:var(--card);
+    border-radius:18px;
+    padding:18px;
+    margin-bottom:14px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.06);
+    font-size:15px;
+    line-height:1.5;
+    color:var(--ink);
+    white-space:pre-wrap;
+    outline:none;
+  }
+  .intro-card.empty{color:var(--secondary);font-style:italic;}
   .overview-empty{
     padding:48px 20px;
     text-align:center;
@@ -489,7 +503,8 @@
 
 <div class="wrap">
   <header class="top">
-    <h1 id="tripTitle">Naamloze Reis</h1>
+    <h1>Oeverloos Gelul</h1>
+    <div class="app-subtitle">Vrij associeren op twee wielen</div>
     <div class="sub" id="entryCount">0 reisbewegingen gelogd</div>
     <div class="sub" id="signOutRow" style="display:none;"><button id="signOutBtn" style="background:none;border:none;padding:0;color:var(--lilac-deep);font:inherit;font-weight:600;cursor:pointer;">Ingelogd — uitloggen</button></div>
     <div class="segmented">
@@ -499,6 +514,7 @@
   </header>
 
   <div id="overviewView" class="view active">
+    <div class="intro-card" id="introCard"></div>
     <div class="overview-map" id="overviewMap"></div>
     <div class="overview-hint">Tik op een etappe om die reisbeweging te openen.</div>
   </div>
@@ -1431,16 +1447,38 @@
   }
   function closePassOverlay(){ $('passOverlay').classList.remove('open'); }
 
+  const INTRO_PLACEHOLDER = 'Tik hier om een introductietekst te schrijven…';
+
+  function renderIntroCard(){
+    const el = $('introCard');
+    if(!el || !manifest) return;
+    const intro = (manifest.intro || '').trim();
+    if(intro){
+      el.textContent = intro;
+      el.classList.remove('empty');
+      el.style.display = 'block';
+      el.setAttribute('contenteditable', editUnlocked ? 'true' : 'false');
+    } else if(editUnlocked){
+      el.textContent = INTRO_PLACEHOLDER;
+      el.classList.add('empty');
+      el.style.display = 'block';
+      el.setAttribute('contenteditable', 'true');
+    } else {
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+  }
+
   function onSignedIn(){
     editUnlocked = true;
-    $('tripTitle').setAttribute('contenteditable','true');
     $('signOutRow').style.display='block';
+    renderIntroCard();
     if(manifest) renderTimeline();
   }
   function onSignedOut(){
     editUnlocked = false;
-    $('tripTitle').setAttribute('contenteditable','false');
     $('signOutRow').style.display='none';
+    renderIntroCard();
     if(manifest) renderTimeline();
   }
 
@@ -1626,10 +1664,14 @@
     }
   });
 
-  $('tripTitle').addEventListener('blur', async ()=>{
+  $('introCard').addEventListener('blur', async ()=>{
     if(!editUnlocked) return;
-    manifest.title = $('tripTitle').textContent.trim();
+    const el = $('introCard');
+    const wasPlaceholder = el.classList.contains('empty');
+    const text = el.textContent.trim();
+    manifest.intro = wasPlaceholder && text===INTRO_PLACEHOLDER ? '' : text;
     await saveManifest(manifest);
+    renderIntroCard();
   });
 
   if(auth){
@@ -1642,8 +1684,7 @@
   async function init(){
     if(!firebaseReady){
       $('timeline').innerHTML = '<div class="loading-msg">Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.</div>';
-      manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
-      $('tripTitle').textContent = manifest.title;
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
       renderOverview();
       return;
     }
@@ -1651,18 +1692,17 @@
     try{
       manifest = await loadManifest();
       if(!manifest){
-        manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
+        manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
         await saveManifest(manifest);
       }
     }catch(err){
       console.error('manifest load/save failed', err);
-      manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
       const detail = (err && (err.message || err.toString())) || 'onbekende fout';
       $('timeline').innerHTML = '<div class="loading-msg">Opslagfout bij het laden: '+esc(detail)+'</div>';
     }
 
-    $('tripTitle').textContent = manifest.title || 'Naamloze Reis';
-    $('tripTitle').setAttribute('contenteditable', editUnlocked ? 'true' : 'false');
+    renderIntroCard();
 
     entries = {};
     for(const id of manifest.entryIds){
