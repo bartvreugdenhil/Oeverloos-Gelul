@@ -1171,6 +1171,15 @@
     const e = entries[id];
     const el = $('catcontent-'+id);
     if(!e || !el) return;
+
+    // Every call rebuilds this card's innerHTML, which detaches any
+    // previously rendered chart canvases — always tear down stale Chart.js
+    // instances first so they're never left pointing at dead canvases.
+    if(dayChartInstances[id]){
+      dayChartInstances[id].forEach(c=>{ try{ c.destroy(); }catch(err){} });
+      delete dayChartInstances[id];
+    }
+
     const c1 = e.cat1 || {};
     const c2 = e.cat2 || {};
     const c3 = e.cat3 || {};
@@ -1217,9 +1226,7 @@
     el.innerHTML = statsHtml + bitterballenHtml + chartsHtml + countersHtml;
 
     if(e.track && e.track.length>1){
-      if(!dayChartInstances[id]){
-        dayChartInstances[id] = renderCharts(id, e.track) || [];
-      }
+      dayChartInstances[id] = renderCharts(id, e.track) || [];
     }
   }
 
