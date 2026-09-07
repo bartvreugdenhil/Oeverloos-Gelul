@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trip Log</title>
+<title>Oeverloos Gelul</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -233,16 +233,33 @@
   }
   .leaflet-container{background:var(--track-bg);font-family:inherit;}
 
-  .poem{
+  .freetext{
     font-style:italic;
     font-size:16px;
     line-height:1.6;
     color:var(--ink);
     white-space:pre-wrap;
-    margin:0 0 16px;
+    margin:0;
     padding-left:14px;
     border-left:3px solid var(--lilac);
   }
+  .freetext.empty{color:var(--secondary);}
+
+  .day .segmented{margin:14px 0;}
+  .cat-content{margin-top:2px;}
+  .cat-title{font-size:17px;font-weight:700;margin:0 0 10px;color:var(--ink);}
+  .cat-sub{margin:0 0 18px;}
+  .cat-sub:last-child{margin-bottom:0;}
+  .cat-sub h4{font-size:11px;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.03em;margin:0 0 6px;}
+
+  .charts{margin:18px 0 4px;}
+  .chart-block{margin-bottom:14px;}
+  .chart-block:last-child{margin-bottom:0;}
+  .chart-block h4{font-size:11px;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.03em;margin:0 0 4px;}
+  .chart-block .chart-wrap{height:90px;position:relative;}
+  .chart-block canvas{width:100%!important;height:100%!important;}
+
+  .counters{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
 
   .photos{
     display:flex;
@@ -318,6 +335,8 @@
     margin:0 0 4px;
   }
   .sheet .sheet-sub{color:var(--secondary);font-size:13px;margin-bottom:20px;}
+  .sheet h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:var(--lilac-deep);margin:24px 0 12px;padding-top:16px;border-top:1px solid var(--sep);}
+  .sheet h3:first-of-type{margin-top:0;padding-top:0;border-top:none;}
   .field{margin-bottom:14px;}
   .field label{
     display:block;
@@ -470,18 +489,18 @@
 
 <div class="wrap">
   <header class="top">
-    <h1 id="tripTitle">Untitled Trip</h1>
-    <div class="sub" id="entryCount">0 entries logged</div>
-    <div class="sub" id="signOutRow" style="display:none;"><button id="signOutBtn" style="background:none;border:none;padding:0;color:var(--lilac-deep);font:inherit;font-weight:600;cursor:pointer;">Signed in — sign out</button></div>
+    <h1 id="tripTitle">Naamloze Reis</h1>
+    <div class="sub" id="entryCount">0 reisbewegingen gelogd</div>
+    <div class="sub" id="signOutRow" style="display:none;"><button id="signOutBtn" style="background:none;border:none;padding:0;color:var(--lilac-deep);font:inherit;font-weight:600;cursor:pointer;">Ingelogd — uitloggen</button></div>
     <div class="segmented">
-      <button id="tabOverviewBtn" class="active">Overview</button>
-      <button id="tabLogBtn">Log</button>
+      <button id="tabOverviewBtn" class="active">Overzicht</button>
+      <button id="tabLogBtn">Logboek</button>
     </div>
   </header>
 
   <div id="overviewView" class="view active">
     <div class="overview-map" id="overviewMap"></div>
-    <div class="overview-hint">Tap a stage to open that day's entry.</div>
+    <div class="overview-hint">Tik op een etappe om die reisbeweging te openen.</div>
   </div>
 
   <div id="logView" class="view">
@@ -494,20 +513,20 @@
 <div class="overlay" id="passOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2 id="passTitle">Sign in to make changes</h2>
-    <div class="sheet-sub" id="passSub">Anyone with this link can view the log. Only the trip owner can sign in to add entries.</div>
+    <h2 id="passTitle">Inloggen om wijzigingen te maken</h2>
+    <div class="sheet-sub" id="passSub">Iedereen met deze link kan het logboek bekijken. Alleen de eigenaar van de reis kan inloggen om reisbewegingen toe te voegen.</div>
     <div class="field">
-      <label>Email</label>
+      <label>E-mailadres</label>
       <input type="text" id="passEmail" autocomplete="username">
     </div>
     <div class="field">
-      <label>Password</label>
+      <label>Wachtwoord</label>
       <input type="password" id="passInput" autocomplete="current-password">
     </div>
-    <div class="err" id="passErr">That's not the right email/password.</div>
+    <div class="err" id="passErr">Dat is niet het juiste e-mailadres/wachtwoord.</div>
     <div class="sheet-actions">
-      <button class="btn" id="passCancel">Cancel</button>
-      <button class="btn primary" id="passSubmit">Sign in</button>
+      <button class="btn" id="passCancel">Annuleren</button>
+      <button class="btn primary" id="passSubmit">Inloggen</button>
     </div>
   </div>
 </div>
@@ -515,65 +534,99 @@
 <div class="overlay" id="entryOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>New entry</h2>
-    <div class="sheet-sub">Export a GPX, TCX, or FIT file from your bike computer's app for the day's ride, then fill in the rest.</div>
+    <h2>Nieuwe reisbeweging</h2>
+    <div class="sheet-sub">Exporteer een GPX-, TCX- of FIT-bestand uit de app van je fietscomputer voor de rit van vandaag, en vul de rest aan.</div>
 
+    <h3>Basis</h3>
     <div class="two-col">
       <div class="field">
-        <label>Date</label>
+        <label>Datum</label>
         <input type="date" id="fDate">
       </div>
       <div class="field">
-        <label>Stage title</label>
-        <input type="text" id="fStageTitle" placeholder="e.g. Glacier Pass">
+        <label>Etappenaam</label>
+        <input type="text" id="fStageTitle" placeholder="bijv. Gletsjerpas">
       </div>
     </div>
 
     <div class="two-col">
       <div class="field">
-        <label>Started at</label>
-        <input type="text" id="fStart" placeholder="e.g. Ushuaia">
+        <label>Vertrekpunt</label>
+        <input type="text" id="fStart" placeholder="bijv. Ushuaia">
       </div>
       <div class="field">
-        <label>Finished at</label>
-        <input type="text" id="fFinish" placeholder="e.g. Tolhuin">
+        <label>Aankomstpunt</label>
+        <input type="text" id="fFinish" placeholder="bijv. Tolhuin">
       </div>
     </div>
 
     <div class="field">
-      <label>Route file (GPX, TCX, or FIT)</label>
+      <label>Routebestand (GPX, TCX of FIT)</label>
       <input type="file" id="fTrack">
-      <div class="hint">FIT files (the raw export most bike computers save) usually carry power data — GPX/TCX often don't. If power's missing, add it manually below.</div>
+      <div class="hint">FIT-bestanden (de ruwe export die de meeste fietscomputers opslaan) bevatten meestal vermogensdata — GPX/TCX vaak niet. Ontbreekt het vermogen, vul het dan hieronder handmatig in.</div>
       <div class="track-preview" id="trackPreview"></div>
     </div>
 
     <div class="two-col">
       <div class="field">
-        <label>Avg power (W) — optional</label>
-        <input type="text" id="fPowerOverride" placeholder="only if not in file">
+        <label>Gem. vermogen (W) — optioneel</label>
+        <input type="text" id="fPowerOverride" placeholder="alleen als niet in bestand">
       </div>
       <div class="field">
-        <label>Distance override (km)</label>
-        <input type="text" id="fDistOverride" placeholder="only if no file">
+        <label>Afstand override (km)</label>
+        <input type="text" id="fDistOverride" placeholder="alleen zonder bestand">
       </div>
     </div>
 
+    <h3>Oeverloos Gelul</h3>
     <div class="field">
-      <label>Poem</label>
-      <textarea id="fPoem" placeholder="Write today's entry..."></textarea>
+      <label>Titel</label>
+      <input type="text" id="fCat1Title" placeholder="bijv. Gedachten onderweg">
+    </div>
+    <div class="field">
+      <label>Vrije tekst</label>
+      <textarea id="fCat1Text" placeholder="Schrijf hier je verhaal van vandaag..."></textarea>
     </div>
 
+    <h3>Vanille Travelblog</h3>
     <div class="field">
-      <label>Photos (up to 4, compressed automatically)</label>
+      <label>Wat heb ik meegemaakt?</label>
+      <textarea id="fCat2Meegemaakt" placeholder="Vertel wat er gebeurd is..."></textarea>
+    </div>
+    <div class="field">
+      <label>Hoogtepunt</label>
+      <textarea id="fCat2Hoogtepunt" placeholder="Wat was het hoogtepunt van vandaag?"></textarea>
+    </div>
+    <div class="field">
+      <label>Dieptepunt</label>
+      <textarea id="fCat2Dieptepunt" placeholder="Wat was het dieptepunt van vandaag?"></textarea>
+    </div>
+
+    <h3>Keiharde Cijfers</h3>
+    <div class="hint" style="margin:-4px 0 14px;">De route-statistieken (kilometers, vermogen, hartslag, bitterballen, etc.) worden automatisch berekend uit het routebestand hierboven.</div>
+    <div class="two-col">
+      <div class="field">
+        <label>Aantal mooie dingen gezien</label>
+        <input type="text" id="fCat3Mooie" placeholder="bijv. 3">
+      </div>
+      <div class="field">
+        <label>Aantal lekkere dingen gegeten</label>
+        <input type="text" id="fCat3Lekkere" placeholder="bijv. 2">
+      </div>
+    </div>
+
+    <h3>Foto's</h3>
+    <div class="field">
+      <label>Foto's (max 4, automatisch gecomprimeerd)</label>
       <input type="file" id="fPhotos" accept="image/*" multiple>
-      <div class="hint">If you upload more than one, tap a thumbnail below to pick which one shows on the overview map.</div>
+      <div class="hint">Upload je meerdere foto's, tik dan op een thumbnail hieronder om te kiezen welke op de overzichtskaart getoond wordt.</div>
       <div class="photo-preview" id="photoPreview"></div>
     </div>
 
     <div class="err" id="entryErr"></div>
     <div class="sheet-actions">
-      <button class="btn" id="entryCancel">Cancel</button>
-      <button class="btn primary" id="entrySave">Save entry</button>
+      <button class="btn" id="entryCancel">Annuleren</button>
+      <button class="btn primary" id="entrySave">Reisbeweging opslaan</button>
     </div>
   </div>
 </div>
@@ -587,6 +640,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -821,17 +875,103 @@
     return points;
   }
 
+  // Annotates each point in-place with cumulative distance (d, km) and
+  // instantaneous speed (speedKmh) from the previous point. Segments with
+  // dt<0.3s are skipped for the speed calc (GPS/timestamp jitter) but still
+  // counted toward cumulative distance.
+  function annotateDistanceSpeed(points){
+    let cum = 0;
+    points[0].d = 0;
+    points[0].speedKmh = null;
+    for(let i=1;i<points.length;i++){
+      const a=points[i-1], b=points[i];
+      const segKm = haversine(a.lat,a.lon,b.lat,b.lon);
+      cum += segKm;
+      b.d = cum;
+      let speedKmh = null;
+      if(a.time!=null && b.time!=null){
+        const dtH = (b.time-a.time)/3600000;
+        if(dtH*3600 >= 0.3) speedKmh = segKm/dtH;
+      }
+      b.speedKmh = speedKmh;
+    }
+    return points;
+  }
+
+  function fmtDuration(min){
+    if(min==null || isNaN(min)) return '—';
+    const totalMin = Math.round(min);
+    const h = Math.floor(totalMin/60);
+    const m = totalMin%60;
+    return h>0 ? h+'u '+m+'m' : m+'m';
+  }
+
+  // Normalized Power (Coggan): resample power onto a ~1s grid (forward-fill
+  // by timestamp if available, else assume 1 sample/sec), 30-sample rolling
+  // average, average of those to the 4th power, then 4th root.
+  function normalizedPower(points){
+    const withPower = points.filter(p=>p.power!=null);
+    if(withPower.length < 30) return null;
+
+    let series;
+    const hasTimes = points.every(p=>p.time!=null);
+    if(hasTimes){
+      const t0 = points[0].time, t1 = points[points.length-1].time;
+      const totalSec = Math.round((t1-t0)/1000);
+      if(totalSec < 30) return null;
+      series = new Array(totalSec+1).fill(null);
+      let pi = 0;
+      let lastPower = points[0].power!=null ? points[0].power : 0;
+      for(let s=0;s<=totalSec;s++){
+        const targetT = t0 + s*1000;
+        while(pi < points.length-1 && points[pi+1].time<=targetT){
+          pi++;
+          if(points[pi].power!=null) lastPower = points[pi].power;
+        }
+        series[s] = lastPower;
+      }
+    } else {
+      series = points.map(p=> p.power!=null ? p.power : 0);
+      if(series.length < 30) return null;
+    }
+
+    const rolling = [];
+    let windowSum = 0;
+    for(let i=0;i<series.length;i++){
+      windowSum += series[i];
+      if(i>=30) windowSum -= series[i-30];
+      if(i>=29) rolling.push(windowSum/30);
+    }
+    if(!rolling.length) return null;
+    const sum4 = rolling.reduce((s,v)=> s + Math.pow(v,4), 0);
+    return Math.pow(sum4/rolling.length, 0.25);
+  }
+
   function computeStats(points){
     if(!points || points.length<2) return null;
+    annotateDistanceSpeed(points);
+
     let dist=0, gain=0, loss=0;
     let hrSum=0, hrN=0, hrMax=0;
     let pwSum=0, pwN=0, pwMax=0;
+    let movingSec=0, maxSpeedKmh=0, workJ=0;
     for(let i=1;i<points.length;i++){
       const a=points[i-1], b=points[i];
       dist += haversine(a.lat,a.lon,b.lat,b.lon);
       if(a.ele!=null && b.ele!=null){
         const d = b.ele-a.ele;
         if(d>0) gain+=d; else loss+=-d;
+      }
+      if(a.time!=null && b.time!=null){
+        const dtSec = (b.time-a.time)/1000;
+        if(dtSec>0){
+          if(b.speedKmh!=null){
+            if(b.speedKmh>maxSpeedKmh) maxSpeedKmh=b.speedKmh;
+            if(b.speedKmh>2) movingSec += dtSec;
+          }
+          const p = b.power!=null ? b.power : (a.power!=null ? a.power : 0);
+          workJ += p*dtSec;
+        }
       }
     }
     points.forEach(p=>{
@@ -845,16 +985,25 @@
     if(first && last && last.time>first.time){
       durationMin = (last.time-first.time)/60000;
     }
+    const movingMin = movingSec>0 ? movingSec/60 : null;
+    const calorieKcal = pwN>0 ? workJ/1000 : null;
+
     return {
       distanceKm: dist,
       elevGainM: gain,
       elevLossM: loss,
       durationMin: durationMin,
+      movingMin: movingMin,
       avgSpeedKmh: durationMin ? dist/(durationMin/60) : null,
+      avgSpeedMovingKmh: movingMin ? dist/(movingMin/60) : null,
+      maxSpeedKmh: maxSpeedKmh>0 ? maxSpeedKmh : null,
       avgHR: hrN ? Math.round(hrSum/hrN) : null,
       maxHR: hrN ? Math.round(hrMax) : null,
       avgPower: pwN ? Math.round(pwSum/pwN) : null,
-      maxPower: pwN ? Math.round(pwMax) : null
+      maxPower: pwN ? Math.round(pwMax) : null,
+      normalizedPower: pwN ? normalizedPower(points) : null,
+      calorieKcal: calorieKcal,
+      bitterballen: calorieKcal!=null ? Math.round(calorieKcal/65) : null
     };
   }
 
@@ -920,13 +1069,17 @@
     return manifest.entryIds.slice().filter(id=>entries[id]).sort((a,b)=> (entries[a].date||'').localeCompare(entries[b].date||''));
   }
 
+  const CAT_LABELS = {1:'Oeverloos Gelul', 2:'Vanille Travelblog', 3:'Keiharde Cijfers'};
+  let activeCat = {};       // entryId -> '1'|'2'|'3'
+  let dayChartInstances = {}; // entryId -> [Chart,...]
+
   function renderTimeline(){
     const container = $('timeline');
     const ids = orderedIds().slice().reverse(); // newest first in the log
-    $('entryCount').textContent = ids.length + (ids.length===1?' entry logged':' entries logged');
+    $('entryCount').textContent = ids.length + (ids.length===1?' reisbeweging gelogd':' reisbewegingen gelogd');
 
     if(ids.length===0){
-      container.innerHTML = '<div class="empty"><h2>No entries yet</h2><p>Once the first day is logged, it\'ll show up here.</p></div>';
+      container.innerHTML = '<div class="empty"><h2>Nog geen reisbewegingen</h2><p>Zodra de eerste dag gelogd is, verschijnt die hier.</p></div>';
       renderOverview();
       return;
     }
@@ -934,41 +1087,40 @@
     container.innerHTML = '';
     Object.values(dayMapInstances).forEach(m=>{ try{ m.remove(); }catch(e){} });
     dayMapInstances = {};
+    Object.values(dayChartInstances).forEach(list=> list.forEach(c=>{ try{ c.destroy(); }catch(e){} }));
+    dayChartInstances = {};
+
     ids.forEach((id)=>{
       const e = entries[id];
       if(!e) return;
+      if(!activeCat[id]) activeCat[id] = '1';
       const card = document.createElement('div');
       card.className='day';
       card.id = 'day-'+id;
-      const s = e.stats || {};
-      const dateLabel = e.date ? new Date(e.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
+      const dateLabel = e.date ? new Date(e.date+'T12:00:00').toLocaleDateString('nl-NL',{month:'short',day:'numeric',year:'numeric'}) : '';
 
-      let statsHtml = '<div class="stats-row">';
-      statsHtml += statBlock('distance', s.distanceKm!=null ? fmt(s.distanceKm,1)+' km' : '—');
-      statsHtml += statBlock('elev gain', s.elevGainM!=null ? fmt(s.elevGainM,0)+' m' : '—');
-      statsHtml += statBlock('avg speed', s.avgSpeedKmh!=null ? fmt(s.avgSpeedKmh,1)+' km/h' : '—');
-      statsHtml += statBlock('avg power', s.avgPower!=null ? s.avgPower+' W' : '—');
-      statsHtml += statBlock('avg hr', s.avgHR!=null ? s.avgHR+' bpm' : '—');
-      statsHtml += statBlock('max hr', s.maxHR!=null ? s.maxHR+' bpm' : '—');
-      statsHtml += '</div>';
+      const dialHtml = '<div class="segmented" data-dial="'+id+'">'+
+        [1,2,3].map(n=>'<button data-cat="'+n+'" class="'+(activeCat[id]===String(n)?'active':'')+'">'+CAT_LABELS[n]+'</button>').join('')+
+        '</div>';
 
       card.innerHTML =
         '<div class="day-head">'+
-          '<span class="day-num">'+esc(e.stageTitle||'Untitled stage')+'</span>'+
+          '<span class="day-num">'+esc(e.stageTitle||'Naamloze etappe')+'</span>'+
           '<span class="day-date">'+dateLabel+'</span>'+
         '</div>'+
         '<div class="day-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>'+
-        statsHtml+
         (e.track && e.track.length>1 ? '<div class="map" id="map-'+id+'"></div>' : '')+
-        (e.poem ? '<div class="poem">'+esc(e.poem)+'</div>' : '')+
         (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
-        (editUnlocked ? '<div class="day-actions"><button data-del="'+id+'">Delete entry</button></div>' : '');
+        dialHtml+
+        '<div class="cat-content" id="catcontent-'+id+'"></div>'+
+        (editUnlocked ? '<div class="day-actions"><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
 
       container.appendChild(card);
 
       if(e.track && e.track.length>1){
         setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
       }
+      renderCategoryContent(id, activeCat[id]);
     });
 
     container.querySelectorAll('.photos img').forEach(img=>{
@@ -979,21 +1131,150 @@
       });
     });
 
+    container.querySelectorAll('[data-dial]').forEach(dial=>{
+      const id = dial.getAttribute('data-dial');
+      dial.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const cat = btn.getAttribute('data-cat');
+          if(activeCat[id]===cat) return;
+          activeCat[id] = cat;
+          dial.querySelectorAll('button').forEach(b=> b.classList.toggle('active', b===btn));
+          renderCategoryContent(id, cat);
+        });
+      });
+    });
+
     if(editUnlocked){
       container.querySelectorAll('[data-del]').forEach(btn=>{
         btn.addEventListener('click', async ()=>{
-          if(!confirm('Delete this entry? This can\'t be undone.')) return;
+          if(!confirm('Deze reisbeweging verwijderen? Dit kan niet ongedaan worden gemaakt.')) return;
           const id = btn.getAttribute('data-del');
           manifest.entryIds = manifest.entryIds.filter(x=>x!==id);
           await saveManifest(manifest);
           await deleteEntryData(id);
           delete entries[id];
+          delete activeCat[id];
           renderTimeline();
         });
       });
     }
 
     renderOverview();
+  }
+
+  function textBlock(text){
+    const t = (text||'').trim();
+    return t ? '<div class="freetext">'+esc(text)+'</div>' : '<div class="freetext empty">Nog niets ingevuld.</div>';
+  }
+
+  function renderCategoryContent(id, cat){
+    const e = entries[id];
+    const el = $('catcontent-'+id);
+    if(!e || !el) return;
+    const c1 = e.cat1 || {};
+    const c2 = e.cat2 || {};
+    const c3 = e.cat3 || {};
+    const s = e.stats || {};
+
+    if(cat==='1'){
+      el.innerHTML =
+        '<div class="cat-title">'+esc(c1.title || 'Oeverloos Gelul')+'</div>'+
+        textBlock(c1.text);
+      return;
+    }
+
+    if(cat==='2'){
+      el.innerHTML =
+        '<div class="cat-sub"><h4>Wat heb ik meegemaakt?</h4>'+textBlock(c2.meegemaakt)+'</div>'+
+        '<div class="cat-sub"><h4>Hoogtepunt</h4>'+textBlock(c2.hoogtepunt)+'</div>'+
+        '<div class="cat-sub"><h4>Dieptepunt</h4>'+textBlock(c2.dieptepunt)+'</div>';
+      return;
+    }
+
+    // cat === '3'
+    let statsHtml = '<div class="stats-row">';
+    statsHtml += statBlock('kilometers', s.distanceKm!=null ? fmt(s.distanceKm,1)+' km' : '—');
+    statsHtml += statBlock('hoogtemeters', s.elevGainM!=null ? fmt(s.elevGainM,0)+' m' : '—');
+    statsHtml += statBlock('beweegtijd', fmtDuration(s.movingMin));
+    statsHtml += statBlock('gem. snelheid (bewogen)', s.avgSpeedMovingKmh!=null ? fmt(s.avgSpeedMovingKmh,1)+' km/h' : '—');
+    statsHtml += statBlock('max snelheid', s.maxSpeedKmh!=null ? fmt(s.maxSpeedKmh,1)+' km/h' : '—');
+    statsHtml += statBlock('gem. vermogen', s.avgPower!=null ? s.avgPower+' W' : '—');
+    statsHtml += statBlock('NP', s.normalizedPower!=null ? fmt(s.normalizedPower,0)+' W' : '—');
+    statsHtml += statBlock('gem. hartslag', s.avgHR!=null ? s.avgHR+' bpm' : '—');
+    statsHtml += '</div>';
+
+    const bitterballenHtml = '<div class="stats-row">'+
+      statBlock('bitterballen verbrand', s.bitterballen!=null ? s.bitterballen : '—')+
+      '</div>';
+
+    const chartsHtml = (e.track && e.track.length>1) ? '<div class="charts" id="charts-'+id+'"></div>' : '';
+
+    const countersHtml = '<div class="counters">'+
+      statBlock('mooie dingen gezien', esc(c3.mooieDingen || '—'))+
+      statBlock('lekkere dingen gegeten', esc(c3.lekkereDingen || '—'))+
+      '</div>';
+
+    el.innerHTML = statsHtml + bitterballenHtml + chartsHtml + countersHtml;
+
+    if(e.track && e.track.length>1){
+      if(!dayChartInstances[id]){
+        dayChartInstances[id] = renderCharts(id, e.track) || [];
+      }
+    }
+  }
+
+  function renderCharts(id, track){
+    const container = $('charts-'+id);
+    if(!container || !window.Chart) return [];
+    const pts = track.filter(p=>p.d!=null);
+    if(pts.length<2) return [];
+    const labels = pts.map(p=>p.d);
+
+    const specs = [
+      {key:'ele', label:'Hoogte (m)', color:'#5B6B36', fill:true},
+      {key:'speedKmh', label:'Snelheid (km/h)', color:'#8670C9', fill:false},
+      {key:'power', label:'Vermogen (W)', color:'#D98E4A', fill:false},
+      {key:'hr', label:'Hartslag (bpm)', color:'#FF3B30', fill:false}
+    ];
+
+    const charts = [];
+    specs.forEach(spec=>{
+      const hasData = pts.some(p=>p[spec.key]!=null);
+      if(!hasData) return;
+      const block = document.createElement('div');
+      block.className = 'chart-block';
+      block.innerHTML = '<h4>'+spec.label+'</h4><div class="chart-wrap"><canvas></canvas></div>';
+      container.appendChild(block);
+      const ctx = block.querySelector('canvas').getContext('2d');
+      const chart = new Chart(ctx, {
+        type:'line',
+        data:{
+          labels: labels,
+          datasets:[{
+            data: pts.map(p=>p[spec.key]),
+            borderColor: spec.color,
+            backgroundColor: spec.color+'33',
+            fill: spec.fill,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.2,
+            spanGaps: true
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          animation:false,
+          plugins:{ legend:{display:false}, tooltip:{enabled:true} },
+          scales:{
+            x:{ type:'linear', ticks:{ maxTicksLimit:6, callback:v=>fmt(v,0)+'km' }, grid:{ display:false } },
+            y:{ ticks:{ maxTicksLimit:4 } }
+          }
+        }
+      });
+      charts.push(chart);
+    });
+    return charts;
   }
 
   function addTileFailNote(el, map){
@@ -1005,7 +1286,7 @@
         if(!tilesOk && tilesFailed > 3 && !el.querySelector('.overview-tile-note')){
           const note = document.createElement('div');
           note.className = 'overview-tile-note';
-          note.textContent = 'Map imagery loads once hosted online — pins and routes still work here.';
+          note.textContent = 'Kaartmateriaal laadt zodra de site online staat — pins en routes werken hier al wel.';
           el.style.position = 'relative';
           el.appendChild(note);
         }
@@ -1041,7 +1322,7 @@
 
     const ids = orderedIds().filter(id => entries[id].track && entries[id].track.length>1);
     if(ids.length===0){
-      el.innerHTML = '<div class="overview-empty">Add an entry with a route file to see your stages here.</div>';
+      el.innerHTML = '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
       return;
     }
 
@@ -1162,7 +1443,7 @@
     const email = $('passEmail').value.trim();
     const pass = $('passInput').value;
     if(!email || !pass){
-      errEl.textContent = 'Enter both email and password.';
+      errEl.textContent = 'Vul zowel e-mailadres als wachtwoord in.';
       errEl.style.display='block';
       return;
     }
@@ -1173,7 +1454,7 @@
       openEntryOverlay();
     }catch(err){
       console.error('sign-in failed', err);
-      errEl.textContent = 'Sign-in failed: ' + (err.message || err.code || 'unknown error');
+      errEl.textContent = 'Inloggen mislukt: ' + (err.message || err.code || 'onbekende fout');
       errEl.style.display='block';
     }finally{
       $('passSubmit').disabled = false;
@@ -1191,7 +1472,10 @@
     $('entryErr').style.display='none';
     $('fDate').value=''; $('fStageTitle').value=''; $('fStart').value=''; $('fFinish').value='';
     $('fTrack').value=''; $('fPowerOverride').value=''; $('fDistOverride').value='';
-    $('fPoem').value=''; $('fPhotos').value='';
+    $('fCat1Title').value=''; $('fCat1Text').value='';
+    $('fCat2Meegemaakt').value=''; $('fCat2Hoogtepunt').value=''; $('fCat2Dieptepunt').value='';
+    $('fCat3Mooie').value=''; $('fCat3Lekkere').value='';
+    $('fPhotos').value='';
     $('trackPreview').style.display='none';
     $('photoPreview').innerHTML = '';
     highlightIdx = 0;
@@ -1228,7 +1512,7 @@
     const file = e.target.files[0];
     if(!file) return;
     $('trackPreview').style.display='block';
-    $('trackPreview').textContent = 'Parsing…';
+    $('trackPreview').textContent = 'Bezig met verwerken…';
     try{
       const name = file.name.toLowerCase();
       let points;
@@ -1242,7 +1526,7 @@
       }
 
       if(!points || points.length < 2){
-        $('trackPreview').textContent = 'Could not find a usable track in this file.';
+        $('trackPreview').textContent = 'Geen bruikbare route gevonden in dit bestand.';
         pendingTrack = null;
         return;
       }
@@ -1252,13 +1536,13 @@
       const bits = [];
       if(stats.distanceKm!=null) bits.push(fmt(stats.distanceKm,1)+' km');
       if(stats.elevGainM!=null) bits.push('+'+fmt(stats.elevGainM,0)+' m');
-      if(stats.avgHR!=null) bits.push('avg HR '+stats.avgHR);
-      if(stats.avgPower!=null) bits.push('avg power '+stats.avgPower+'W');
-      else bits.push('no power data in file');
-      $('trackPreview').textContent = points.length+' points parsed — '+bits.join(' · ');
+      if(stats.avgHR!=null) bits.push('gem. hartslag '+stats.avgHR);
+      if(stats.avgPower!=null) bits.push('gem. vermogen '+stats.avgPower+'W');
+      else bits.push('geen vermogensdata in bestand');
+      $('trackPreview').textContent = points.length+' punten verwerkt — '+bits.join(' · ');
     }catch(err){
       console.error('track parse failed', err);
-      $('trackPreview').textContent = 'Couldn\'t parse this file: ' + (err.message || err);
+      $('trackPreview').textContent = 'Kon dit bestand niet verwerken: ' + (err.message || err);
       pendingTrack = null;
     }
   });
@@ -1267,10 +1551,10 @@
     const errEl = $('entryErr');
     errEl.style.display='none';
     const date = $('fDate').value;
-    if(!date){ errEl.textContent='Add a date.'; errEl.style.display='block'; return; }
+    if(!date){ errEl.textContent='Vul een datum in.'; errEl.style.display='block'; return; }
 
     $('entrySave').disabled = true;
-    $('entrySave').textContent = 'Saving...';
+    $('entrySave').textContent = 'Bezig met opslaan...';
 
     try{
       let stats = pendingTrack ? pendingTrack.stats : {};
@@ -1282,7 +1566,7 @@
 
       let track = [];
       if(pendingTrack){
-        track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele}));
+        track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
       }
 
       const photoFiles = Array.from($('fPhotos').files).slice(0,4);
@@ -1302,8 +1586,20 @@
         stageTitle: $('fStageTitle').value.trim(),
         start: $('fStart').value.trim(),
         finish: $('fFinish').value.trim(),
-        poem: $('fPoem').value,
-        stats, track, photos
+        stats, track, photos,
+        cat1: {
+          title: $('fCat1Title').value.trim(),
+          text: $('fCat1Text').value
+        },
+        cat2: {
+          meegemaakt: $('fCat2Meegemaakt').value,
+          hoogtepunt: $('fCat2Hoogtepunt').value,
+          dieptepunt: $('fCat2Dieptepunt').value
+        },
+        cat3: {
+          mooieDingen: $('fCat3Mooie').value.trim(),
+          lekkereDingen: $('fCat3Lekkere').value.trim()
+        }
       };
 
       await saveEntryData(id, entry);
@@ -1314,12 +1610,12 @@
       closeEntryOverlay();
       renderTimeline();
     }catch(err){
-      errEl.textContent = 'Something went wrong saving this entry — try again.';
+      errEl.textContent = 'Er ging iets mis bij het opslaan — probeer het opnieuw.';
       errEl.style.display='block';
       console.error(err);
     }finally{
       $('entrySave').disabled = false;
-      $('entrySave').textContent = 'Save entry';
+      $('entrySave').textContent = 'Reisbeweging opslaan';
     }
   });
 
@@ -1338,8 +1634,8 @@
   // ---------- init ----------
   async function init(){
     if(!firebaseReady){
-      $('timeline').innerHTML = '<div class="loading-msg">Couldn\'t start Firebase — check firebaseConfig at the top of the script.</div>';
-      manifest = {title:'Untitled Trip', entryIds:[], passcode:null};
+      $('timeline').innerHTML = '<div class="loading-msg">Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.</div>';
+      manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
       $('tripTitle').textContent = manifest.title;
       renderOverview();
       return;
@@ -1348,17 +1644,17 @@
     try{
       manifest = await loadManifest();
       if(!manifest){
-        manifest = {title:'Untitled Trip', entryIds:[], passcode:null};
+        manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
         await saveManifest(manifest);
       }
     }catch(err){
       console.error('manifest load/save failed', err);
-      manifest = {title:'Untitled Trip', entryIds:[], passcode:null};
-      const detail = (err && (err.message || err.toString())) || 'unknown error';
-      $('timeline').innerHTML = '<div class="loading-msg">Storage error on load: '+esc(detail)+'</div>';
+      manifest = {title:'Naamloze Reis', entryIds:[], passcode:null};
+      const detail = (err && (err.message || err.toString())) || 'onbekende fout';
+      $('timeline').innerHTML = '<div class="loading-msg">Opslagfout bij het laden: '+esc(detail)+'</div>';
     }
 
-    $('tripTitle').textContent = manifest.title || 'Untitled Trip';
+    $('tripTitle').textContent = manifest.title || 'Naamloze Reis';
     $('tripTitle').setAttribute('contenteditable', editUnlocked ? 'true' : 'false');
 
     entries = {};
@@ -1374,11 +1670,11 @@
   }
 
   window.addEventListener('error', (e)=>{
-    showErrorBanner('Error: ' + e.message);
+    showErrorBanner('Fout: ' + e.message);
   });
   window.addEventListener('unhandledrejection', (e)=>{
-    const msg = (e.reason && (e.reason.message || e.reason.toString())) || 'unknown error';
-    showErrorBanner('Error: ' + msg);
+    const msg = (e.reason && (e.reason.message || e.reason.toString())) || 'onbekende fout';
+    showErrorBanner('Fout: ' + msg);
   });
   function showErrorBanner(text){
     let banner = document.getElementById('errBanner');
