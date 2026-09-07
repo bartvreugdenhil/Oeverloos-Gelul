@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oeverloos Gelul</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238670C9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='5.5' cy='17.5' r='3.5'/%3E%3Ccircle cx='18.5' cy='17.5' r='3.5'/%3E%3Cpath d='M15 6a1 1 0 100-2 1 1 0 000 2z' fill='%238670C9' stroke='none'/%3E%3Cpath d='M12 17.5V14l-3-3 4-3 2 3h3'/%3E%3Cpath d='M9 11l2-3'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -323,9 +324,11 @@
     border:none;
     color:var(--danger);
     padding:6px 4px;
+    margin-left:10px;
     cursor:pointer;
     font-family:inherit;
   }
+  .day-actions button[data-edit]{color:var(--accent, var(--lilac-deep));}
 
   /* floating add button */
   .fab{
@@ -345,6 +348,7 @@
     display:flex;align-items:center;justify-content:center;
     z-index:1500;
   }
+  .fab svg{width:26px;height:26px;}
   .fab:active{background:var(--olive-deep);}
 
   /* bottom sheet modal */
@@ -578,11 +582,11 @@
       <div class="editable-text" id="dailyCard"></div>
     </div>
     <div class="overview-map" id="overviewMap"></div>
-    <div class="overview-hint">Tik op een etappe om die reisbeweging te openen.</div>
+    <div class="overview-hint">Tik op een etappe voor mijn gezwets, foto's, en de cijfertjes.</div>
   </div>
 </div>
 
-<button class="fab" id="addBtn">+</button>
+<button class="fab" id="addBtn" aria-label="Inloggen"></button>
 
 <div class="pane" id="entryPane">
   <div class="pane-header">
@@ -619,7 +623,7 @@
 <div class="overlay" id="entryOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>Nieuwe reisbeweging</h2>
+    <h2 id="entryFormTitle">Nieuwe reisbeweging</h2>
     <div class="sheet-sub">Exporteer een GPX-, TCX- of FIT-bestand uit de app van je fietscomputer voor de rit van vandaag, en vul de rest aan.</div>
 
     <h3>Basis</h3>
@@ -764,6 +768,9 @@
   let entries = {};    // id -> entry object
   let editUnlocked = false;
   let pendingTrack = null; // parsed track for the entry currently being created
+  let editingEntryId = null; // id of the entry being edited, or null when adding a new one
+  let existingPhotos = [];   // photos kept from an entry being edited, unless replaced
+  let existingTrackData = null; // {stats, track} kept from an entry being edited, unless replaced
   let overviewMapInstance = null;
   let dayMapInstances = {};
 
@@ -1140,6 +1147,17 @@
     return '<div class="stat"><div class="kpi-icon">'+KPI_ICONS[iconKey]+'</div><span class="v">'+value+'</span><span class="l">'+label+'</span></div>';
   }
 
+  const FAB_ICONS = {
+    login: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>'
+  };
+  function updateFabIcon(){
+    const btn = $('addBtn');
+    if(!btn) return;
+    btn.innerHTML = FAB_ICONS[editUnlocked ? 'plus' : 'login'];
+    btn.setAttribute('aria-label', editUnlocked ? 'Nieuwe reisbeweging toevoegen' : 'Inloggen');
+  }
+
   function esc(s){
     const d = document.createElement('div');
     d.textContent = s;
@@ -1251,7 +1269,7 @@
       (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
       dialHtml+
       '<div class="cat-content" id="catcontent-'+id+'"></div>'+
-      (editUnlocked ? '<div class="day-actions"><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
+      (editUnlocked ? '<div class="day-actions"><button data-edit="'+id+'">Bewerk reisbeweging</button><button data-del="'+id+'">Verwijder reisbeweging</button></div>' : '');
 
     body.innerHTML = '';
     body.appendChild(card);
@@ -1280,6 +1298,10 @@
     });
 
     if(editUnlocked){
+      const editBtn = card.querySelector('[data-edit]');
+      if(editBtn){
+        editBtn.addEventListener('click', ()=> openEntryOverlay(entries[id]));
+      }
       const delBtn = card.querySelector('[data-del]');
       if(delBtn){
         delBtn.addEventListener('click', async ()=>{
@@ -1483,8 +1505,8 @@
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'});
     addTileFailNote(el, map)(tiles);
     tiles.addTo(map);
-    L.polyline(latlngs, {color:'#fff', weight:7, opacity:0.9}).addTo(map);
-    const line = L.polyline(latlngs, {color:'#8670C9', weight:5, opacity:0.95}).addTo(map);
+    L.polyline(latlngs, {color:'#fff', weight:9, opacity:0.9}).addTo(map);
+    const line = L.polyline(latlngs, {color:'#8670C9', weight:7, opacity:0.95}).addTo(map);
     map._routeBounds = line.getBounds();
     map.fitBounds(map._routeBounds, {padding:[16,16]});
     L.circleMarker(latlngs[0], {radius:5, color:'#5B6B36', fillColor:'#5B6B36', fillOpacity:1}).addTo(map);
@@ -1524,8 +1546,8 @@
       track.forEach(p=>{ if(p.lat!=null&&p.lon!=null) allBounds.push([p.lat,p.lon]); });
 
       const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
-      L.polyline(routeLatLngs, {color:'#fff', weight:6, opacity:0.85}).addTo(map);
-      L.polyline(routeLatLngs, {color:'#8670C9', weight:4, opacity:0.95}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#fff', weight:8, opacity:0.85}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#8670C9', weight:6, opacity:0.95}).addTo(map);
 
       const e = entries[id];
       const routeLabel = (e.start||'?') + ' → ' + (e.finish||'?');
@@ -1613,6 +1635,7 @@
   function onSignedIn(){
     editUnlocked = true;
     $('signOutRow').style.display='block';
+    updateFabIcon();
     renderIntroCard();
     renderDailyCard();
     if(manifest) renderTimeline();
@@ -1620,6 +1643,7 @@
   function onSignedOut(){
     editUnlocked = false;
     $('signOutRow').style.display='none';
+    updateFabIcon();
     renderIntroCard();
     renderDailyCard();
     if(manifest) renderTimeline();
@@ -1656,22 +1680,65 @@
 
   // ---------- entry form ----------
   let highlightIdx = 0;
-  function openEntryOverlay(){
+  function openEntryOverlay(entry){
     $('entryErr').style.display='none';
-    $('fDate').value=''; $('fStageTitle').value=''; $('fStart').value=''; $('fFinish').value='';
-    $('fTrack').value=''; $('fPowerOverride').value=''; $('fDistOverride').value='';
-    $('fCat1Title').value=''; $('fCat1Text').value='';
-    $('fCat2Meegemaakt').value=''; $('fCat2Hoogtepunt').value=''; $('fCat2Dieptepunt').value='';
-    $('fCat3Mooie').value=''; $('fCat3Lekkere').value='';
-    $('fPhotos').value='';
-    $('trackPreview').style.display='none';
-    $('photoPreview').innerHTML = '';
+    editingEntryId = entry ? entry.id : null;
+    $('entryFormTitle').textContent = entry ? 'Reisbeweging bewerken' : 'Nieuwe reisbeweging';
+    $('entrySave').textContent = entry ? 'Wijzigingen opslaan' : 'Reisbeweging opslaan';
+
+    $('fDate').value = entry ? (entry.date||'') : '';
+    $('fStageTitle').value = entry ? (entry.stageTitle||'') : '';
+    $('fStart').value = entry ? (entry.start||'') : '';
+    $('fFinish').value = entry ? (entry.finish||'') : '';
+    $('fTrack').value = '';
+    $('fPowerOverride').value = (entry && entry.stats && entry.stats.avgPower!=null) ? entry.stats.avgPower : '';
+    $('fDistOverride').value = (entry && entry.stats && entry.stats.distanceKm!=null) ? entry.stats.distanceKm : '';
+    $('fCat1Title').value = entry ? ((entry.cat1&&entry.cat1.title)||'') : '';
+    $('fCat1Text').value = entry ? ((entry.cat1&&entry.cat1.text)||'') : '';
+    $('fCat2Meegemaakt').value = entry ? ((entry.cat2&&entry.cat2.meegemaakt)||'') : '';
+    $('fCat2Hoogtepunt').value = entry ? ((entry.cat2&&entry.cat2.hoogtepunt)||'') : '';
+    $('fCat2Dieptepunt').value = entry ? ((entry.cat2&&entry.cat2.dieptepunt)||'') : '';
+    $('fCat3Mooie').value = entry ? ((entry.cat3&&entry.cat3.mooieDingen)||'') : '';
+    $('fCat3Lekkere').value = entry ? ((entry.cat3&&entry.cat3.lekkereDingen)||'') : '';
+    $('fPhotos').value = '';
     highlightIdx = 0;
     pendingTrack = null;
+
+    existingPhotos = (entry && entry.photos) ? entry.photos.slice() : [];
+    existingTrackData = (entry && entry.track && entry.track.length>1) ? {stats: entry.stats||{}, track: entry.track} : null;
+
+    const preview = $('photoPreview');
+    preview.innerHTML = '';
+    if(existingPhotos.length){
+      const note = document.createElement('div');
+      note.className = 'hint';
+      note.style.width = '100%';
+      note.textContent = 'Huidige foto\'s (blijven behouden, tenzij je hierboven nieuwe foto\'s kiest):';
+      preview.appendChild(note);
+      existingPhotos.forEach(p=>{
+        const pick = document.createElement('div');
+        pick.className = 'ppick';
+        pick.innerHTML = '<img src="'+p+'">';
+        preview.appendChild(pick);
+      });
+    }
+
+    if(existingTrackData){
+      const st = existingTrackData.stats || {};
+      const bits = [];
+      if(st.distanceKm!=null) bits.push(fmt(st.distanceKm,1)+' km');
+      if(st.elevGainM!=null) bits.push('+'+fmt(st.elevGainM,0)+' m');
+      $('trackPreview').style.display='block';
+      $('trackPreview').textContent = 'Bestaande route behouden' + (bits.length ? ' — '+bits.join(' · ') : '') + ' (upload hierboven een nieuw bestand om te vervangen).';
+    } else {
+      $('trackPreview').style.display='none';
+    }
+
     $('entryOverlay').classList.add('open');
   }
   function closeEntryOverlay(){ $('entryOverlay').classList.remove('open'); }
 
+  updateFabIcon();
   $('addBtn').addEventListener('click', ()=>{
     if(editUnlocked){ openEntryOverlay(); return; }
     openPassOverlay();
@@ -1745,30 +1812,39 @@
     $('entrySave').textContent = 'Bezig met opslaan...';
 
     try{
-      let stats = pendingTrack ? pendingTrack.stats : {};
-      stats = Object.assign({}, stats);
+      let stats, track;
+      if(pendingTrack){
+        stats = Object.assign({}, pendingTrack.stats);
+        track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
+      } else if(existingTrackData){
+        stats = Object.assign({}, existingTrackData.stats);
+        track = existingTrackData.track;
+      } else {
+        stats = {};
+        track = [];
+      }
       const distOverride = parseFloat($('fDistOverride').value);
       if(!isNaN(distOverride)) stats.distanceKm = distOverride;
       const powerOverride = parseFloat($('fPowerOverride').value);
       if(!isNaN(powerOverride)) stats.avgPower = powerOverride;
 
-      let track = [];
-      if(pendingTrack){
-        track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
-      }
-
       const photoFiles = Array.from($('fPhotos').files).slice(0,4);
-      const photos = [];
-      for(const f of photoFiles){
-        const b64 = await compressImage(f, 900, 0.6);
-        photos.push(b64);
-      }
-      if(highlightIdx > 0 && highlightIdx < photos.length){
-        const [h] = photos.splice(highlightIdx, 1);
-        photos.unshift(h);
+      let photos;
+      if(photoFiles.length){
+        photos = [];
+        for(const f of photoFiles){
+          const b64 = await compressImage(f, 900, 0.6);
+          photos.push(b64);
+        }
+        if(highlightIdx > 0 && highlightIdx < photos.length){
+          const [h] = photos.splice(highlightIdx, 1);
+          photos.unshift(h);
+        }
+      } else {
+        photos = existingPhotos;
       }
 
-      const id = date + '-' + Math.random().toString(36).slice(2,8);
+      const id = editingEntryId || (date + '-' + Math.random().toString(36).slice(2,8));
       const entry = {
         id, date,
         stageTitle: $('fStageTitle').value.trim(),
@@ -1797,13 +1873,14 @@
 
       closeEntryOverlay();
       renderTimeline();
+      if(currentPaneId === id){ renderEntryPane(id); }
     }catch(err){
       errEl.textContent = 'Er ging iets mis bij het opslaan — probeer het opnieuw.';
       errEl.style.display='block';
       console.error(err);
     }finally{
       $('entrySave').disabled = false;
-      $('entrySave').textContent = 'Reisbeweging opslaan';
+      $('entrySave').textContent = editingEntryId ? 'Wijzigingen opslaan' : 'Reisbeweging opslaan';
     }
   });
 
