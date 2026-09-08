@@ -406,6 +406,12 @@
   }
   .subscribe-msg.ok{display:block;color:var(--olive-deep);}
   .subscribe-msg.err{display:block;color:var(--danger);}
+  .subscribe-privacy{
+    margin-top:var(--s3);
+    font-size:var(--t-caps);
+    line-height:1.5;
+    color:var(--ink-soft);
+  }
 
   @media (max-width:420px){
     .subscribe-form{flex-direction:column;}
@@ -1417,6 +1423,7 @@
           <button class="btn primary" type="submit" id="subscribeBtn">Aanmelden</button>
         </form>
         <div class="subscribe-msg" id="subscribeMsg"></div>
+        <div class="subscribe-privacy">Je ontvangt alleen een mailtje bij een nieuwe etappe. Verwerking via Buttondown; je kunt je op elk moment afmelden via de link in elke mail.</div>
       </div>
       <!-- Posting into a hidden iframe keeps the visitor on the page instead of
            being thrown onto Buttondown's own confirmation screen. -->
