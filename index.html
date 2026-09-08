@@ -2431,6 +2431,11 @@
     const pts = track.filter(p=>p.d!=null);
     if(pts.length<2) return [];
     const labels = pts.map(p=>p.d);
+    // d is cumulative, so the last point is the ride's distance. Pin the axis to
+    // it: left to itself Chart.js rounds up to the next "nice" tick, so a 150km
+    // ride would get an axis running to 200 and appear to stop three-quarters
+    // of the way along.
+    const maxDistance = labels[labels.length-1];
 
     const specs = [
       {key:'ele', label:'Hoogte (m)', color:'#5B6B36', fill:true},
@@ -2473,6 +2478,9 @@
           scales:{
             x:{
               type:'linear',
+              min: 0,
+              max: maxDistance,
+              bounds:'data',
               ticks:{ maxTicksLimit:6, callback:v=>fmt(v,0)+'km', color:tickColor, font:{size:10, family:'Inter'} },
               grid:{ display:false },
               border:{ color:gridColor }
