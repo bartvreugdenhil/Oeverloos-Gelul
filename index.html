@@ -1211,7 +1211,7 @@
   <div class="hero-wash"></div>
   <div class="hero-inner">
     <h1>Oeverloos Gelul</h1>
-    <div class="app-subtitle">Vrij associeren op twee wielen</div>
+    <div class="app-subtitle">Vrij associëren op twee wielen</div>
     <div class="hero-rule"></div>
     <div id="signOutRow" style="display:none;"><button id="signOutBtn">Ingelogd — uitloggen</button></div>
   </div>
@@ -2739,7 +2739,10 @@
     const text = (value || '').trim();
     let visible = true;
     if(text){
-      el.textContent = text;
+      // innerHTML, not textContent: the stored value may carry the small set of
+      // formatting tags serializeRich allows. Everything in it was escaped or
+      // allowlisted on save, and only the owner can write this field.
+      el.innerHTML = text;
       el.classList.remove('empty');
       el.setAttribute('contenteditable', editUnlocked ? 'true' : 'false');
     } else if(editUnlocked){
@@ -2757,11 +2760,49 @@
     if(section) section.style.display = visible ? '' : 'none';
   }
 
+  // contenteditable emits arbitrary markup -- styled spans, <font>, whatever a
+  // paste dragged in -- so rather than storing innerHTML wholesale we walk the
+  // tree and re-emit a tiny allowlist: italic, bold, underline, and newlines.
+  // Anything else is unwrapped to its text. Block elements collapse to "\n",
+  // which the pre-wrap white-space setting already renders, so values saved as
+  // plain text before this existed keep working untouched.
+  const RICH_TAGS = {I:'i', EM:'i', B:'b', STRONG:'b', U:'u'};
+
+  function styleTag(el){
+    const s = el.style;
+    if(!s) return null;
+    if(s.fontStyle === 'italic') return 'i';
+    const w = s.fontWeight;
+    if(w === 'bold' || w === 'bolder' || parseInt(w, 10) >= 600) return 'b';
+    if((s.textDecoration || '').indexOf('underline') !== -1) return 'u';
+    return null;
+  }
+
+  function serializeRich(node){
+    let out = '';
+    Array.prototype.forEach.call(node.childNodes, child=>{
+      if(child.nodeType === 3){ out += esc(child.nodeValue); return; }
+      if(child.nodeType !== 1) return;
+      const tag = child.tagName;
+      // drop these entirely -- unwrapping them would spill their source into
+      // the text (a pasted <script> leaving "alert(1)" behind as prose)
+      if(tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return;
+      if(tag === 'BR'){ out += '\n'; return; }
+      // a div/p in contenteditable means "new line"
+      if((tag === 'DIV' || tag === 'P') && out && out.slice(-1) !== '\n') out += '\n';
+      const inner = serializeRich(child);
+      const wrap = RICH_TAGS[tag] || styleTag(child);
+      out += (wrap && inner) ? '<'+wrap+'>'+inner+'</'+wrap+'>' : inner;
+    });
+    return out;
+  }
+
   async function saveEditableField(textId, field, placeholder, rerender){
     const el = $(textId);
     const wasPlaceholder = el.classList.contains('empty');
-    const text = el.textContent.trim();
-    manifest[field] = (wasPlaceholder && text===placeholder) ? '' : text;
+    const plain = el.textContent.trim();
+    const rich = serializeRich(el).trim();
+    manifest[field] = (wasPlaceholder && plain===placeholder) ? '' : rich;
     await saveManifest(manifest);
     rerender();
   }
