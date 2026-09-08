@@ -216,15 +216,48 @@
     font:inherit;font-weight:600;cursor:pointer;
   }
 
-  /* ---------- 2. intro lede ---------- */
+  /* ---------- 2. intro ---------- */
+  /* Native <details>, so the toggle needs no JS and stays keyboard-accessible. */
+  .intro-details{
+    background:var(--surface);
+    border-radius:var(--r-lg);
+    padding:var(--s4) var(--s5);
+    box-shadow:var(--shadow-card);
+  }
+  .intro-summary{
+    list-style:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:var(--s3);
+    font-family:var(--font-display);
+    font-size:var(--t-h3);
+    font-weight:700;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .intro-summary::-webkit-details-marker{display:none;}
+  .intro-summary::after{
+    content:'';
+    flex-shrink:0;
+    width:8px;height:8px;
+    border-right:2px solid var(--accent);
+    border-bottom:2px solid var(--accent);
+    transform:translateY(-2px) rotate(45deg);
+    transition:transform 0.2s ease;
+  }
+  .intro-details[open] .intro-summary::after{transform:translateY(2px) rotate(-135deg);}
   .intro-card{
     font-family:var(--font-display);
-    font-size:var(--t-h2);
-    line-height:1.45;
+    font-size:var(--t-body);
+    line-height:1.6;
     color:var(--ink);
     white-space:pre-wrap;
     outline:none;
-    margin:0;
+    margin:var(--s3) 0 0;
+    padding-top:var(--s3);
+    border-top:1px solid var(--sep);
   }
   .intro-card.empty{color:var(--ink-soft);font-style:italic;}
 
@@ -1175,7 +1208,10 @@
 <div id="overviewView">
   <section class="section" id="introSection">
     <div class="section-inner">
-      <div class="intro-card" id="introCard"></div>
+      <details class="intro-details" id="introWrap">
+        <summary class="intro-summary">Waar gaat deze reis over?</summary>
+        <div class="intro-card" id="introCard"></div>
+      </details>
     </div>
   </section>
 
@@ -2718,7 +2754,14 @@
     rerender();
   }
 
-  function renderIntroCard(){ renderEditableCard('introCard', 'introCard', manifest && manifest.intro, INTRO_PLACEHOLDER); }
+  function renderIntroCard(){
+    renderEditableCard('introWrap', 'introCard', manifest && manifest.intro, INTRO_PLACEHOLDER);
+    // Signed in with nothing written yet, open it so the placeholder is
+    // actually reachable -- otherwise the prompt to write hides behind a
+    // collapsed summary.
+    const wrap = $('introWrap');
+    if(wrap && editUnlocked && !(manifest && (manifest.intro||'').trim())) wrap.open = true;
+  }
   function renderDailyCard(){ renderEditableCard('dailyCardWrap', 'dailyCard', manifest && manifest.dailyThought, DAILY_PLACEHOLDER); }
 
   function onSignedIn(){
