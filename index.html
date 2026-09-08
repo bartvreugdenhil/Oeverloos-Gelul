@@ -4,6 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oeverloos Gelul</title>
+<meta name="description" content="Een fietsdagboek van Indonesië naar Vietnam. Oeverloos gelul, vanille travelblog en keiharde cijfers — etappe voor etappe.">
+<meta name="theme-color" content="#584590">
+<!-- Link preview. og:image must be an absolute URL, so this is pinned to the
+     live domain rather than a relative path -- a relative one renders nothing
+     in WhatsApp, Signal or Instagram. Replace og-image.jpg (1200x630) in the
+     repo root to change the card without touching this markup. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Oeverloos Gelul">
+<meta property="og:locale" content="nl_NL">
+<meta property="og:url" content="https://oeverloosgelul.nl/">
+<meta property="og:title" content="Oeverloos Gelul">
+<meta property="og:description" content="Vrij associëren op twee wielen — een fietsdagboek van Indonesië naar Vietnam.">
+<meta property="og:image" content="https://oeverloosgelul.nl/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bart aan een tafeltje met een aperol spritz na een etappe.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Oeverloos Gelul">
+<meta name="twitter:description" content="Vrij associëren op twee wielen — een fietsdagboek van Indonesië naar Vietnam.">
+<meta name="twitter:image" content="https://oeverloosgelul.nl/og-image.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238670C9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='5.5' cy='17.5' r='3.5'/%3E%3Ccircle cx='18.5' cy='17.5' r='3.5'/%3E%3Cpath d='M15 6a1 1 0 100-2 1 1 0 000 2z' fill='%238670C9' stroke='none'/%3E%3Cpath d='M12 17.5V14l-3-3 4-3 2 3h3'/%3E%3Cpath d='M9 11l2-3'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -211,11 +231,14 @@
     margin:var(--s4) 0 0;
   }
   #signOutRow{margin-top:var(--s4);font-size:var(--t-small);}
-  #signOutRow button{
+  #backupRow{margin-top:var(--s2);font-size:var(--t-small);}
+  #signOutRow button,
+  #backupRow button{
     background:none;border:none;padding:0;
     color:var(--on-dark-accent);
     font:inherit;font-weight:600;cursor:pointer;
   }
+  #backupRow button[disabled]{opacity:0.6;cursor:default;}
 
   /* ---------- 2. glowing panels (intro, vrije associatie) ---------- */
   /* One card design used twice: the intro is a native <details>, so its toggle
@@ -1225,6 +1248,20 @@
     display:none;
   }
   .photo-preview .ppick.highlight .star{display:block;}
+  .photo-preview .ppick-del{
+    position:absolute;top:2px;left:2px;
+    width:18px;height:18px;
+    padding:0;
+    border:none;
+    border-radius:var(--r-full);
+    background:rgba(28,28,30,0.72);
+    color:#fff;
+    font-size:13px;
+    line-height:18px;
+    text-align:center;
+    cursor:pointer;
+  }
+  .photo-preview .ppick-del:hover{background:var(--danger);}
 
   /* full-screen entry pane */
   .pane{
@@ -1330,6 +1367,7 @@
     <div class="app-subtitle">Vrij associëren op twee wielen</div>
     <div class="hero-rule"></div>
     <div id="signOutRow" style="display:none;"><button id="signOutBtn">Ingelogd — uitloggen</button></div>
+    <div id="backupRow" style="display:none;"><button id="backupBtn">Back-up downloaden</button></div>
   </div>
 </header>
 
@@ -1535,7 +1573,7 @@
     <div class="field">
       <label>Foto's (max 4, automatisch gecomprimeerd)</label>
       <input type="file" id="fPhotos" accept="image/*" multiple>
-      <div class="hint">Upload je meerdere foto's, tik dan op een thumbnail hieronder om te kiezen welke op de overzichtskaart getoond wordt.</div>
+      <div class="hint">Nieuwe foto's komen bij de bestaande. De omslagfoto (★) is de foto die op de kaart, in de lijst en bovenaan de pagina verschijnt.</div>
       <div class="photo-preview" id="photoPreview"></div>
     </div>
 
@@ -1556,6 +1594,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-storage-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
@@ -1585,11 +1624,16 @@
 
   let db = null;
   let auth = null;
+  let storage = null;
   let firebaseReady = false;
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     auth = firebase.auth();
+    // Photos live in Storage, not in the entry document. A base64 data URI
+    // costs 33% over the raw bytes and counts against Firestore's hard 1MB
+    // per-document limit -- four photos already filled 99% of one entry.
+    try{ storage = firebase.storage(); }catch(e){ console.error('storage init failed', e); }
     // Long-polling avoids a connection failure seen in some sandboxed/proxied
     // network contexts (e.g. testing inside Claude's own preview). Harmless
     // on a normally-hosted page too.
@@ -1604,9 +1648,15 @@
   let editUnlocked = false;
   let pendingTrack = null; // parsed track for the entry currently being created
   let editingEntryId = null; // id of the entry being edited, or null when adding a new one
-  let existingPhotos = [];   // photos kept from an entry being edited, unless replaced
-  let existingPhotoLocs = []; // their map positions, kept in step with the above
-  let pendingPhotoMeta = []; // EXIF read from the files currently selected
+  // One working list for the photos of the entry currently open in the form,
+  // whether they were already stored or picked just now. Keeping them in a
+  // single list is what makes deleting, reordering and choosing the highlight
+  // work the same way for both.
+  //   {src, url, thumb, file, meta, loc}
+  // url/thumb are set for a photo already in Storage; file is set for a new
+  // pick. src is whatever the preview should show.
+  let formPhotos = [];
+  let removedPhotoUrls = []; // stored files to clean up, once the save succeeds
   let existingTrackData = null; // {stats, track} kept from an entry being edited, unless replaced
   let overviewMapInstance = null;
   let dayMapInstances = {};
@@ -1635,15 +1685,53 @@
   async function saveManifest(m){
     await db.collection('tripdata').doc('manifest').set(m);
   }
-  async function loadEntry(id){
-    const snap = await db.collection('entries').doc(id).get();
-    return snap.exists ? snap.data() : null;
+  // One query for the whole collection. Fetching each id separately meant a
+  // serialised round trip per stage: at thirty stages that is thirty waits
+  // before anything renders, for data that arrives in a single response here.
+  async function loadAllEntries(){
+    const snap = await db.collection('entries').get();
+    const out = {};
+    snap.forEach(doc=>{ out[doc.id] = doc.data(); });
+    return out;
   }
   async function saveEntryData(id, data){
     await db.collection('entries').doc(id).set(data);
   }
   async function deleteEntryData(id){
     await db.collection('entries').doc(id).delete();
+  }
+
+  // ---------- photo storage ----------
+  // Two files per photo: a full-size one for the lightbox and the hero, and a
+  // small thumbnail for the stage cards and map pins. Without the thumbnail an
+  // overview of thirty stages would pull thirty full-size images.
+  const PHOTO_FULL = {width:1400, quality:0.72};
+  const PHOTO_THUMB = {width:420, quality:0.6};
+  const STORAGE_HOSTS = ['firebasestorage.googleapis.com', 'storage.googleapis.com'];
+
+  function isStoredUrl(src){
+    if(typeof src !== 'string' || src.indexOf('http') !== 0) return false;
+    try{ return STORAGE_HOSTS.indexOf(new URL(src).hostname) !== -1; }
+    catch(e){ return false; }
+  }
+
+  async function uploadPhotoBlob(entryId, blob, suffix){
+    if(!storage) throw new Error('Firebase Storage is niet beschikbaar.');
+    const name = Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+suffix+'.jpg';
+    const ref = storage.ref('photos/'+entryId+'/'+name);
+    // Long cache: the file name is unique per upload, so a stored photo is
+    // never replaced in place and can be cached indefinitely.
+    await ref.put(blob, {contentType:'image/jpeg', cacheControl:'public,max-age=31536000,immutable'});
+    return await ref.getDownloadURL();
+  }
+
+  // Removing a photo from an entry should not leave the file behind paying for
+  // itself forever. Failure here is deliberately swallowed: an orphaned file is
+  // a much smaller problem than a save that refuses to complete.
+  async function deleteStoredPhoto(url){
+    if(!storage || !isStoredUrl(url)) return;
+    try{ await storage.refFromURL(url).delete(); }
+    catch(e){ console.warn('kon oude foto niet verwijderen', e); }
   }
 
   // ---------- likes & comments ----------
@@ -2124,27 +2212,57 @@
   }
 
   // ---------- image compression ----------
-  function compressImage(file, maxWidth, quality){
+  // Decoded once, then drawn at each size we need: decoding a 12-megapixel
+  // phone photo twice is the slow half of an upload on a mid-range handset.
+  function loadImageElement(src){
     return new Promise((resolve, reject)=>{
-      const reader = new FileReader();
-      reader.onload = (e)=>{
-        const img = new Image();
-        img.onload = ()=>{
-          const scale = Math.min(1, maxWidth/img.width);
-          const w = Math.round(img.width*scale);
-          const h = Math.round(img.height*scale);
-          const canvas = document.createElement('canvas');
-          canvas.width=w; canvas.height=h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img,0,0,w,h);
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = reject;
-        img.src = e.target.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      const img = new Image();
+      img.onload = ()=> resolve(img);
+      img.onerror = reject;
+      img.src = src;
     });
+  }
+
+  function canvasBlob(img, maxWidth, quality){
+    const scale = Math.min(1, maxWidth/img.width);
+    const w = Math.round(img.width*scale);
+    const h = Math.round(img.height*scale);
+    const canvas = document.createElement('canvas');
+    canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    return new Promise((resolve, reject)=>{
+      canvas.toBlob(b=> b ? resolve(b) : reject(new Error('kon de foto niet comprimeren')), 'image/jpeg', quality);
+    });
+  }
+
+  function dataUriToBlob(uri){
+    const comma = uri.indexOf(',');
+    const meta = uri.slice(0, comma);
+    const bytes = atob(uri.slice(comma+1));
+    const buf = new Uint8Array(bytes.length);
+    for(let i=0;i<bytes.length;i++) buf[i] = bytes.charCodeAt(i);
+    const type = (/data:([^;]+)/.exec(meta) || [null,'image/jpeg'])[1];
+    return new Blob([buf], {type});
+  }
+
+  // Returns {full, thumb} blobs. Accepts a File or any image src (the migration
+  // feeds it the data URIs of photos stored before Storage existed).
+  async function compressImage(source){
+    let src;
+    if(typeof source === 'string'){
+      src = source;
+    } else {
+      src = await new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onload = e=> resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(source);
+      });
+    }
+    const img = await loadImageElement(src);
+    const full = await canvasBlob(img, PHOTO_FULL.width, PHOTO_FULL.quality);
+    const thumb = await canvasBlob(img, PHOTO_THUMB.width, PHOTO_THUMB.quality);
+    return {full, thumb};
   }
 
   // ---------- rendering ----------
@@ -2210,10 +2328,17 @@
     return d.innerHTML;
   }
 
+  // Entries written before photos moved to Storage carry no photoThumbs, so
+  // fall back to the full image -- a legacy data URI is its own thumbnail.
+  function photoThumbSrc(e, i){
+    const t = e && e.photoThumbs && e.photoThumbs[i];
+    return t || (e && e.photos && e.photos[i]) || null;
+  }
+
   function openLightbox(photos, startIndex){
     if(!photos || !photos.length) return;
     const scroll = $('lightboxScroll');
-    scroll.innerHTML = photos.map(p=>'<div class="lb-slide"><img src="'+p+'"></div>').join('');
+    scroll.innerHTML = photos.map(p=>'<div class="lb-slide"><img src="'+p+'" alt=""></div>').join('');
     $('lightbox').classList.add('open');
     requestAnimationFrame(()=>{
       scroll.scrollLeft = (startIndex||0) * scroll.clientWidth;
@@ -2289,14 +2414,23 @@
     const hero = $('hero');
     if(!photoEl || !hero) return;
 
-    const ids = orderedIds();
+    // The most recently *submitted* entry backs the hero, not the one with the
+    // latest date -- posting a stage should put its own cover photo on top,
+    // even when it is logged out of order or a rest day is added in between.
+    // photos[0] is the highlight: entrySave moves the chosen one to the front.
+    // Entries written before updatedAt existed fall back to date order, which
+    // is what the hero used to do anyway.
+    const withPhotos = orderedIds()
+      .map(id=> entries[id])
+      .filter(e=> e && e.photos && e.photos.length);
 
-    // Newest entry with a photo backs the hero; with none, the band collapses
-    // to a short flat colour field instead of reserving space for nothing.
     let heroPhoto = null;
-    for(let i = ids.length - 1; i >= 0; i--){
-      const e = entries[ids[i]];
-      if(e && e.photos && e.photos.length){ heroPhoto = e.photos[0]; break; }
+    if(withPhotos.length){
+      const stamped = withPhotos.filter(e=> typeof e.updatedAt === 'number');
+      const pick = stamped.length
+        ? stamped.reduce((a,b)=> b.updatedAt > a.updatedAt ? b : a)
+        : withPhotos[withPhotos.length-1];
+      heroPhoto = pick.photos[0];
     }
     photoEl.style.backgroundImage = heroPhoto ? 'url("'+heroPhoto+'")' : '';
     hero.classList.toggle('no-photo', !heroPhoto);
@@ -2364,7 +2498,7 @@
       const e = entries[id];
       const rest = isRest(e);
       const s = e.stats || {};
-      const photo = (e.photos && e.photos.length) ? e.photos[0] : null;
+      const photo = photoThumbSrc(e, 0);
       const dateLabel = e.date
         ? new Date(e.date+'T12:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'long'})
         : '';
@@ -2459,7 +2593,8 @@
       '</div>'+
       '<div class="day-route">'+esc(e.stageTitle||(rest?'Naamloze rustdag':'Naamloze etappe'))+'</div>'+
       routeLine+
-      (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
+      (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>
+        '<img src="'+photoThumbSrc(e,i)+'" loading="lazy" alt="Foto bij '+esc(e.stageTitle||'deze reisbeweging')+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
       (showMap ? '<div class="map" id="map-'+id+'"></div>' : '')+
       dialHtml+
       '<div class="cat-content" id="catcontent-'+id+'"></div>'+
@@ -2472,7 +2607,7 @@
 
     if(showMap){
       setTimeout(()=>{
-        const opts = {photos: e.photos, photoLocs: e.photoLocs};
+        const opts = {photos: e.photos, photoThumbs: e.photoThumbs, photoLocs: e.photoLocs};
         dayMapInstances[id] = hasRoute
           ? drawMap('map-'+id, e.track, opts)
           : drawPointMap('map-'+id, e.restLoc, opts);
@@ -2507,9 +2642,14 @@
       if(delBtn){
         delBtn.addEventListener('click', async ()=>{
           if(!confirm('Deze reisbeweging verwijderen? Dit kan niet ongedaan worden gemaakt.')) return;
+          const doomed = entries[id] || {};
           manifest.entryIds = manifest.entryIds.filter(x=>x!==id);
           await saveManifest(manifest);
           await deleteEntryData(id);
+          // Take the image files with it, or they linger in Storage unreferenced.
+          for(const url of (doomed.photos||[]).concat(doomed.photoThumbs||[])){
+            await deleteStoredPhoto(url);
+          }
           delete entries[id];
           delete activeCat[id];
           closeEntryPane();
@@ -3003,13 +3143,14 @@
   // photos uploaded before EXIF was captured.
   function addPhotoPins(map, opts){
     const photos = (opts && opts.photos) || [];
+    const thumbs = (opts && opts.photoThumbs) || [];
     const locs = (opts && opts.photoLocs) || [];
     photos.forEach((src, i)=>{
       const loc = locs[i];
       if(!loc || loc.lat==null || loc.lon==null) return;
       const icon = L.divIcon({
         className: 'photo-pin-wrap',
-        html: '<div class="photo-pin"><img src="'+src+'"></div>',
+        html: '<div class="photo-pin"><img alt="" src="'+(thumbs[i] || src)+'"></div>',
         iconSize: [0,0],
         iconAnchor: [0,0]
       });
@@ -3099,7 +3240,7 @@
       const routeLabel = rest ? (e.start || 'Rustdag') : (e.start||'?') + ' → ' + (e.finish||'?');
       const titleText = esc(e.stageTitle ? e.stageTitle : routeLabel);
       const hasPhoto = e.photos && e.photos.length;
-      const thumb = hasPhoto ? '<img class="thumb" src="'+e.photos[0]+'">' : '';
+      const thumb = hasPhoto ? '<img class="thumb" alt="" src="'+photoThumbSrc(e,0)+'">' : '';
       const icon = L.divIcon({
         className:'stage-pin-wrap',
         html:'<div class="stage-pin'+(hasPhoto?'':' no-photo')+(rest?' is-rest':'')+'">'+thumb+'<div class="label">'+titleText+'</div></div>',
@@ -3267,18 +3408,77 @@
     if(fixed) renderTimeline();
   }
 
+  // One-off move of the photos that predate Firebase Storage. They were stored
+  // as base64 data URIs inside the entry document, which cost 33% over the raw
+  // bytes and counted against Firestore's hard 1MB per-document limit -- one
+  // entry sat at 99% of it, a single photo away from refusing to save.
+  //
+  // Each entry is rewritten only after all of its photos have uploaded, so a
+  // failure part-way leaves that entry exactly as it was. Re-running picks up
+  // wherever it stopped: entries whose photos are already URLs are skipped.
+  let migratedPhotos = false;
+  async function migratePhotosToStorage(){
+    if(migratedPhotos || !manifest || !editUnlocked || !storage) return;
+    if(!Object.keys(entries).length) return;
+
+    const pending = Object.keys(entries).filter(id=>{
+      const p = entries[id] && entries[id].photos;
+      return p && p.some(src=> typeof src === 'string' && src.indexOf('data:') === 0);
+    });
+    if(!pending.length) return;
+    migratedPhotos = true;
+
+    showErrorBanner('Foto\'s verplaatsen naar Firebase Storage — even geduld, sluit deze pagina niet.');
+    let done = 0;
+    for(const id of pending){
+      const e = entries[id];
+      try{
+        const photos = [], thumbs = [];
+        for(let i=0;i<e.photos.length;i++){
+          const src = e.photos[i];
+          if(typeof src !== 'string' || src.indexOf('data:') !== 0){
+            photos.push(src);
+            thumbs.push((e.photoThumbs && e.photoThumbs[i]) || null);
+            continue;
+          }
+          // The stored bytes go up untouched -- re-encoding an already
+          // compressed JPEG would cost quality for nothing. Only the thumbnail,
+          // which doesn't exist yet, needs the canvas.
+          const img = await loadImageElement(src);
+          photos.push(await uploadPhotoBlob(id, dataUriToBlob(src), 'full'));
+          thumbs.push(await uploadPhotoBlob(id, await canvasBlob(img, PHOTO_THUMB.width, PHOTO_THUMB.quality), 'thumb'));
+        }
+        const updated = Object.assign({}, e, {photos, photoThumbs: thumbs});
+        await saveEntryData(id, updated);
+        entries[id] = updated;
+        done++;
+        console.info('foto\'s verplaatst naar Storage voor '+id);
+      }catch(err){
+        console.error('photo migration failed for '+id, err);
+        showErrorBanner('Kon de foto\'s van '+id+' niet verplaatsen: ' + ((err && err.message) || err));
+        return; // leave the rest for a later attempt rather than hammering on
+      }
+    }
+    const banner = $('errBanner');
+    if(banner) banner.remove();
+    if(done) renderTimeline();
+  }
+
   function onSignedIn(){
     editUnlocked = true;
     $('signOutRow').style.display='block';
+    $('backupRow').style.display='block';
     updateFabIcon();
     renderIntroCard();
     renderDailyCard();
     if(manifest) renderTimeline();
     backfillMaxSpeeds();
+    migratePhotosToStorage();
   }
   function onSignedOut(){
     editUnlocked = false;
     $('signOutRow').style.display='none';
+    $('backupRow').style.display='none';
     updateFabIcon();
     renderIntroCard();
     renderDailyCard();
@@ -3312,6 +3512,44 @@
   $('passInput').addEventListener('keydown', (e)=>{
     if(e.key==='Enter') $('passSubmit').click();
   });
+  // Everything the trip is made of, in one file: the manifest, every entry and
+  // the likes and comments visitors left. Photos are Storage URLs rather than
+  // bytes -- embedding them would produce a file too large to be useful, and
+  // they stay reachable from these URLs.
+  $('backupBtn').addEventListener('click', async ()=>{
+    const btn = $('backupBtn');
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = 'Back-up maken...';
+    try{
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        format: 'oeverloos-gelul-backup-1',
+        manifest: manifest,
+        // Ordered the way the trip reads, not the way Firestore returns them.
+        entries: orderedIds().map(id=> entries[id]),
+        likes: likesByEntry,
+        comments: commentsByEntry
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'oeverloos-gelul-backup-' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 10000);
+      btn.textContent = 'Back-up gedownload';
+      setTimeout(()=>{ btn.textContent = was; btn.disabled = false; }, 2500);
+    }catch(err){
+      console.error('backup failed', err);
+      showErrorBanner('Back-up mislukt: ' + ((err && err.message) || err));
+      btn.textContent = was;
+      btn.disabled = false;
+    }
+  });
+
   $('signOutBtn').addEventListener('click', ()=>{
     // Allow a fresh anonymous session afterwards, so signing out drops you
     // back to being an ordinary visitor who can still like and comment.
@@ -3385,26 +3623,18 @@
     highlightIdx = 0;
     pendingTrack = null;
 
-    pendingPhotoMeta = [];
-    existingPhotos = (entry && entry.photos) ? entry.photos.slice() : [];
-    existingPhotoLocs = (entry && entry.photoLocs) ? entry.photoLocs.slice() : [];
     existingTrackData = (entry && entry.track && entry.track.length>1) ? {stats: entry.stats||{}, track: entry.track} : null;
 
-    const preview = $('photoPreview');
-    preview.innerHTML = '';
-    if(existingPhotos.length){
-      const note = document.createElement('div');
-      note.className = 'hint';
-      note.style.width = '100%';
-      note.textContent = 'Huidige foto\'s (blijven behouden, tenzij je hierboven nieuwe foto\'s kiest):';
-      preview.appendChild(note);
-      existingPhotos.forEach(p=>{
-        const pick = document.createElement('div');
-        pick.className = 'ppick';
-        pick.innerHTML = '<img src="'+p+'">';
-        preview.appendChild(pick);
-      });
-    }
+    removedPhotoUrls = [];
+    formPhotos = ((entry && entry.photos) || []).map((url, i)=>({
+      src: (entry.photoThumbs && entry.photoThumbs[i]) || url,
+      url: url,
+      thumb: (entry.photoThumbs && entry.photoThumbs[i]) || null,
+      file: null,
+      meta: null,
+      loc: (entry.photoLocs && entry.photoLocs[i]) || null
+    }));
+    renderPhotoPicker();
 
     if(existingTrackData){
       const st = existingTrackData.stats || {};
@@ -3428,40 +3658,81 @@
   });
   $('entryCancel').addEventListener('click', closeEntryOverlay);
 
-  $('fPhotos').addEventListener('change', (e)=>{
-    const files = Array.from(e.target.files).slice(0,4);
-    highlightIdx = 0;
+  const MAX_PHOTOS = 4;
+
+  function renderPhotoPicker(){
     const preview = $('photoPreview');
+    if(!preview) return;
     preview.innerHTML = '';
+    if(!formPhotos.length) return;
 
-    // read EXIF now, from the originals -- compressImage will destroy it
-    pendingPhotoMeta = new Array(files.length).fill(null);
-    files.forEach((f, i)=>{
-      readPhotoMeta(f).then(meta=>{
-        pendingPhotoMeta[i] = meta;
-        const loc = resolvePhotoLoc(meta, pendingTrack && pendingTrack.points);
-        const tag = preview.querySelectorAll('.ppick')[i];
-        if(tag && loc){
-          const dot = document.createElement('span');
-          dot.className = 'ppick-geo';
-          dot.textContent = '◉';
-          dot.title = 'Locatie gevonden — komt op de kaart';
-          tag.appendChild(dot);
-        }
-      });
-    });
+    const note = document.createElement('div');
+    note.className = 'hint';
+    note.style.width = '100%';
+    note.textContent = 'Tik op een foto om die als omslagfoto te kiezen (★), of op × om hem te verwijderen.';
+    preview.appendChild(note);
 
-    files.forEach((f, i)=>{
-      const url = URL.createObjectURL(f);
+    formPhotos.forEach((p, i)=>{
       const pick = document.createElement('div');
-      pick.className = 'ppick' + (i===0 ? ' highlight' : '');
-      pick.innerHTML = '<img src="'+url+'"><span class="star">★</span>';
-      pick.addEventListener('click', ()=>{
+      pick.className = 'ppick' + (i===highlightIdx ? ' highlight' : '');
+      pick.innerHTML = '<img alt="" src="'+p.src+'"><span class="star">★</span>'+
+        '<button type="button" class="ppick-del" aria-label="Deze foto verwijderen">×</button>';
+      pick.querySelector('img').addEventListener('click', ()=>{
         highlightIdx = i;
-        preview.querySelectorAll('.ppick').forEach((el,idx)=> el.classList.toggle('highlight', idx===i));
+        renderPhotoPicker();
       });
+      pick.querySelector('.ppick-del').addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        removeFormPhoto(i);
+      });
+      if(p.loc){
+        const dot = document.createElement('span');
+        dot.className = 'ppick-geo';
+        dot.textContent = '◉';
+        dot.title = 'Locatie gevonden — komt op de kaart';
+        pick.appendChild(dot);
+      }
       preview.appendChild(pick);
     });
+  }
+
+  function removeFormPhoto(i){
+    const gone = formPhotos.splice(i, 1)[0];
+    if(gone){
+      // Only queued here: the files are removed once the save actually goes
+      // through, so cancelling the form leaves the entry untouched.
+      if(gone.url) removedPhotoUrls.push(gone.url);
+      if(gone.thumb) removedPhotoUrls.push(gone.thumb);
+      if(gone.file && gone.src) { try{ URL.revokeObjectURL(gone.src); }catch(e){} }
+    }
+    if(i < highlightIdx) highlightIdx--;
+    if(highlightIdx > formPhotos.length - 1) highlightIdx = Math.max(0, formPhotos.length - 1);
+    renderPhotoPicker();
+  }
+
+  $('fPhotos').addEventListener('change', async (e)=>{
+    const files = Array.from(e.target.files);
+    const room = MAX_PHOTOS - formPhotos.length;
+    files.slice(0, Math.max(0, room)).forEach(f=>{
+      formPhotos.push({src: URL.createObjectURL(f), url:null, thumb:null, file:f, meta:null, loc:null});
+    });
+    // Clear the input so picking the same file again after a delete still fires
+    // a change event, and so the files aren't read a second time on save.
+    e.target.value = '';
+    if(files.length > room){
+      $('entryErr').textContent = 'Maximaal '+MAX_PHOTOS+' foto\'s per reisbeweging — de rest is overgeslagen.';
+      $('entryErr').style.display = 'block';
+    }
+    renderPhotoPicker();
+
+    // EXIF has to come off the originals: the canvas pass destroys it.
+    for(const p of formPhotos){
+      if(p.file && !p.meta){
+        p.meta = await readPhotoMeta(p.file);
+        p.loc = resolvePhotoLoc(p.meta, pendingTrack && pendingTrack.points);
+      }
+    }
+    renderPhotoPicker();
   });
 
   $('fTrack').addEventListener('change', async (e)=>{
@@ -3546,40 +3817,42 @@
         if(!isNaN(powerOverride)) stats.avgPower = powerOverride;
       }
 
-      const photoFiles = Array.from($('fPhotos').files).slice(0,4);
-      let photos, photoLocs;
-      if(photoFiles.length){
-        // keep each photo married to its location through the highlight
-        // reorder below -- two parallel arrays would drift apart
-        const pairs = [];
-        for(let i=0;i<photoFiles.length;i++){
-          const b64 = await compressImage(photoFiles[i], 900, 0.6);
-          const meta = pendingPhotoMeta[i] || await readPhotoMeta(photoFiles[i]);
-          pairs.push({
-            b64: b64,
-            loc: resolvePhotoLoc(meta, pendingTrack && pendingTrack.points)
-          });
-        }
-        if(highlightIdx > 0 && highlightIdx < pairs.length){
-          const [h] = pairs.splice(highlightIdx, 1);
-          pairs.unshift(h);
-        }
-        photos = pairs.map(p=>p.b64);
-        photoLocs = pairs.map(p=>p.loc || null);
-      } else {
-        photos = existingPhotos;
-        photoLocs = existingPhotoLocs;
+      // The id has to exist before the photos do: it names their folder.
+      const id = editingEntryId || (date + '-' + Math.random().toString(36).slice(2,8));
+
+      // Highlight first, so photos[0] is the cover everywhere it is read.
+      // Each photo carries its own location through the move, which two loose
+      // parallel arrays would not survive.
+      const ordered = formPhotos.slice();
+      if(highlightIdx > 0 && highlightIdx < ordered.length){
+        ordered.unshift(ordered.splice(highlightIdx, 1)[0]);
       }
 
-      const id = editingEntryId || (date + '-' + Math.random().toString(36).slice(2,8));
+      const photos = [], photoThumbs = [], photoLocs = [];
+      for(let i=0;i<ordered.length;i++){
+        const p = ordered[i];
+        if(p.file){
+          $('entrySave').textContent = 'Foto '+(i+1)+'/'+ordered.length+' uploaden...';
+          const sized = await compressImage(p.file);
+          photos.push(await uploadPhotoBlob(id, sized.full, 'full'));
+          photoThumbs.push(await uploadPhotoBlob(id, sized.thumb, 'thumb'));
+        } else {
+          photos.push(p.url);
+          photoThumbs.push(p.thumb || null);
+        }
+        photoLocs.push(p.loc || null);
+      }
+      $('entrySave').textContent = 'Bezig met opslaan...';
+
       const entry = {
         id, date,
+        updatedAt: Date.now(), // drives which entry's cover photo backs the hero
         kind: isRestDay ? 'rest' : null,
         stageTitle: $('fStageTitle').value.trim(),
         start: $('fStart').value.trim(),
         finish: isRestDay ? '' : $('fFinish').value.trim(),
         restLoc: restLoc || null,
-        stats, track, photos, photoLocs,
+        stats, track, photos, photoThumbs, photoLocs,
         cat1: {
           title: $('fCat1Title').value.trim(),
           text: $('fCat1Text').value
@@ -3600,6 +3873,11 @@
       await saveManifest(manifest);
       entries[id] = entry;
       markSeen(id); // the author shouldn't see their own post flagged NIEUW
+
+      // Only now that the entry is safely stored: if this failed earlier the
+      // files would be gone while the document still pointed at them.
+      for(const url of removedPhotoUrls){ await deleteStoredPhoto(url); }
+      removedPhotoUrls = [];
 
       closeEntryOverlay();
       renderTimeline();
@@ -3714,24 +3992,34 @@
       showErrorBanner('Opslagfout bij het laden: '+detail);
     }
 
+    // Legacy field: the passcode gate was replaced by Firebase Auth, but the
+    // value was still being written back into a world-readable document on
+    // every save. Dropping it here means the next save removes it for good.
+    if(manifest && 'passcode' in manifest) delete manifest.passcode;
+
     renderIntroCard();
     renderDailyCard();
 
+    // Entries and social data don't depend on each other, so both requests go
+    // out together instead of one waiting on the other.
     entries = {};
-    for(const id of manifest.entryIds){
-      try{
-        const e = await loadEntry(id);
-        if(e) entries[id] = e;
-      }catch(err){
-        console.error('entry load failed', id, err);
-      }
-    }
+    const [all] = await Promise.all([
+      loadAllEntries().catch(err=>{
+        console.error('entries load failed', err);
+        showErrorBanner('Kon de reisbewegingen niet laden: ' + ((err && err.message) || 'onbekende fout'));
+        return {};
+      }),
+      loadSocial()
+    ]);
+    // The manifest stays the source of truth for which entries exist, so a
+    // document left behind by a failed delete never reappears.
+    manifest.entryIds.forEach(id=>{ if(all[id]) entries[id] = all[id]; });
 
-    await loadSocial();
     loadSeenIds(); // needs entries loaded, to seed a first-time visitor
 
     renderTimeline();
-    backfillMaxSpeeds(); // no-op unless signed in and something needs repairing
+    backfillMaxSpeeds();          // no-ops unless signed in and repair is due
+    migratePhotosToStorage();
   }
 
   window.addEventListener('error', (e)=>{

@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Firebase Storage security rules for Oeverloos Gelul.
+//
+// Paste this into: Firebase console > Storage > Rules > Publish.
+// Storage must be enabled for the project first (Firebase console > Storage >
+// Get started) or every upload fails with storage/unknown.
+//
+// !! Replace OWNER_UID below with the same uid used in firestore.rules.
+//
+// Photos are readable by anyone -- they are the trip, and the site is public.
+// Only the owner can add or remove them.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isOwner() {
+      return request.auth != null && request.auth.uid == 'OWNER_UID';
+    }
+
+    // photos/<entryId>/<timestamp>-<rand>-(full|thumb).jpg
+    match /photos/{entryId}/{fileName} {
+      allow read: if true;
+
+      // 8MB ceiling and an image content type: the app uploads a re-encoded
+      // JPEG of a few hundred KB, so anything near this is already wrong.
+      allow write: if isOwner()
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow delete: if isOwner();
+    }
+
+    // Anything not matched above stays closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
