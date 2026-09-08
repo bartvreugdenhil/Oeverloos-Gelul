@@ -414,6 +414,8 @@
     padding:var(--s1) var(--s2);
     border-radius:var(--r-sm);
   }
+  /* A rest day is deliberately a different kind of thing, not etappe nr. 0 */
+  .stage-index.is-rest{background:var(--olive-deep);color:var(--ink-invert);}
   .stage-body{padding:var(--s4);}
   .stage-date{
     font-size:var(--t-caps);
@@ -634,6 +636,8 @@
     padding:var(--s1) var(--s2);
     border-radius:var(--r-sm);
   }
+  /* pinned to olive rather than --accent, which the dial re-themes per category */
+  .day-num.is-rest{background:var(--olive-deep);}
   .day-date{
     font-size:var(--t-caps);
     font-weight:700;
@@ -1142,7 +1146,26 @@
     font-size:var(--t-small);
     font-family:var(--font-body);
   }
+  .checkfield label{
+    display:flex;
+    align-items:center;
+    gap:var(--s2);
+    margin-bottom:0;
+    text-transform:none;
+    letter-spacing:0;
+    font-size:var(--t-small);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .checkfield input[type=checkbox]{
+    width:18px;height:18px;
+    accent-color:var(--accent);
+    flex:0 0 auto;
+  }
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);}
+  /* .two-col's display:grid is an author rule and so beats the UA [hidden]
+     rule -- without this the hidden override row would still be visible. */
+  [hidden]{display:none !important;}
   .hint{font-size:var(--t-caps);color:var(--ink-soft);margin-top:var(--s1);line-height:1.4;}
   .track-preview{
     font-size:var(--t-caps);
@@ -1431,30 +1454,35 @@
         <input type="date" id="fDate">
       </div>
       <div class="field">
-        <label>Etappenaam</label>
+        <label id="lStageTitle">Etappenaam</label>
         <input type="text" id="fStageTitle" placeholder="bijv. Gletsjerpas">
       </div>
     </div>
 
+    <div class="field checkfield">
+      <label for="fRest"><input type="checkbox" id="fRest"> Rustdag (geen rit)</label>
+      <div class="hint">Vink dit aan voor een dag zonder fietsrit — de route en de ritstatistieken vervallen dan.</div>
+    </div>
+
     <div class="two-col">
       <div class="field">
-        <label>Vertrekpunt</label>
+        <label id="lStart">Vertrekpunt</label>
         <input type="text" id="fStart" placeholder="bijv. Ushuaia">
       </div>
-      <div class="field">
+      <div class="field" id="wFinish">
         <label>Aankomstpunt</label>
         <input type="text" id="fFinish" placeholder="bijv. Tolhuin">
       </div>
     </div>
 
-    <div class="field">
+    <div class="field" id="wTrack">
       <label>Routebestand (GPX, TCX of FIT)</label>
       <input type="file" id="fTrack">
       <div class="hint">FIT-bestanden (de ruwe export die de meeste fietscomputers opslaan) bevatten meestal vermogensdata — GPX/TCX vaak niet. Ontbreekt het vermogen, vul het dan hieronder handmatig in.</div>
       <div class="track-preview" id="trackPreview"></div>
     </div>
 
-    <div class="two-col">
+    <div class="two-col" id="wOverrides">
       <div class="field">
         <label>Gem. vermogen (W) — optioneel</label>
         <input type="text" id="fPowerOverride" placeholder="alleen als niet in bestand">
@@ -1463,6 +1491,12 @@
         <label>Afstand override (km)</label>
         <input type="text" id="fDistOverride" placeholder="alleen zonder bestand">
       </div>
+    </div>
+
+    <div class="field" id="wRestLoc" hidden>
+      <label>Locatie (breedte, lengte) — optioneel</label>
+      <input type="text" id="fRestLoc" placeholder="bijv. 21.0278, 105.8342">
+      <div class="hint">Zonder coördinaten toont de rustdag geen kaartje. In Google Maps: rechtsklik op de plek en klik op het getallenpaar om het te kopiëren.</div>
     </div>
 
     <h3>Oeverloos Gelul</h3>
@@ -1490,7 +1524,7 @@
     </div>
 
     <h3>Keiharde Cijfers</h3>
-    <div class="hint" style="margin:-4px 0 14px;">De route-statistieken (kilometers, vermogen, hartslag, bitterballen, etc.) worden automatisch berekend uit het routebestand hierboven.</div>
+    <div class="hint" style="margin:-4px 0 14px;" id="hCijfers">De route-statistieken (kilometers, vermogen, hartslag, bitterballen, etc.) worden automatisch berekend uit het routebestand hierboven.</div>
     <div class="two-col">
       <div class="field">
         <label>Aantal mooie dingen gezien</label>
@@ -1500,6 +1534,10 @@
         <label>Aantal lekkere dingen gegeten</label>
         <input type="text" id="fCat3Lekkere" placeholder="bijv. 2">
       </div>
+    </div>
+    <div class="field" id="wBitterballen" hidden>
+      <label>Bitterballen verbrand</label>
+      <input type="text" id="fBitterballen" placeholder="bijv. 5">
     </div>
 
     <h3>Foto's</h3>
@@ -2203,6 +2241,20 @@
     return manifest.entryIds.slice().filter(id=>entries[id]).sort((a,b)=> (entries[a].date||'').localeCompare(entries[b].date||''));
   }
 
+  function isRest(e){ return !!e && e.kind === 'rest'; }
+
+  // Rest days sit in the list in date order but don't consume an etappe number,
+  // so the ride numbering keeps counting only the days actually ridden.
+  function stageNumbers(){
+    const map = {};
+    let n = 0;
+    orderedIds().forEach(id=>{ map[id] = isRest(entries[id]) ? null : ++n; });
+    return map;
+  }
+  function stageLabel(num){
+    return num==null ? 'Rustdag' : 'Etappe '+String(num).padStart(2,'0');
+  }
+
   function computeKPIs(){
     const ids = orderedIds();
     let words=0, mooie=0, lekkere=0, km=0, elev=0, bb=0;
@@ -2316,8 +2368,10 @@
       return;
     }
 
-    el.innerHTML = ids.map((id, idx)=>{
+    const nums = stageNumbers();
+    el.innerHTML = ids.map(id=>{
       const e = entries[id];
+      const rest = isRest(e);
       const s = e.stats || {};
       const photo = (e.photos && e.photos.length) ? e.photos[0] : null;
       const dateLabel = e.date
@@ -2330,16 +2384,22 @@
       if(s.movingMin!=null) stats += stageStat('onderweg', fmtDuration(s.movingMin));
       if(s.bitterballen!=null) stats += stageStat('bitterballen', s.bitterballen);
 
+      // A rest day has one place, not a route -- no arrow, and nothing at all
+      // rather than a lonely question mark when it wasn't filled in.
+      const routeLine = rest
+        ? (e.start ? '<div class="stage-route">'+esc(e.start)+'</div>' : '')
+        : '<div class="stage-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>';
+
       return '<button class="stage-card'+(isNewEntry(id)?' is-new':'')+'" data-stage="'+esc(id)+'">'+
         '<div class="stage-photo'+(photo?'':' no-photo')+'"'+
           (photo ? ' style="background-image:url(\''+photo+'\')"' : '')+'>'+
-          '<span class="stage-index">Etappe '+String(idx+1).padStart(2,'0')+'</span>'+
+          '<span class="stage-index'+(rest?' is-rest':'')+'">'+stageLabel(nums[id])+'</span>'+
           (isNewEntry(id) ? '<span class="stage-new">Nieuw</span>' : '')+
         '</div>'+
         '<div class="stage-body">'+
           '<div class="stage-date">'+esc(dateLabel)+'</div>'+
-          '<div class="stage-title">'+esc(e.stageTitle||'Naamloze etappe')+'</div>'+
-          '<div class="stage-route">'+esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+'</div>'+
+          '<div class="stage-title">'+esc(e.stageTitle||(rest?'Naamloze rustdag':'Naamloze etappe'))+'</div>'+
+          routeLine+
           (stats ? '<div class="stage-stats">'+stats+'</div>' : '')+
           socialCounts(id)+
         '</div>'+
@@ -2390,19 +2450,26 @@
       [1,2,3].map(n=>'<button data-cat="'+n+'" class="'+(activeCat[id]===String(n)?'active':'')+'">'+CAT_LABELS[n]+'</button>').join('')+
       '</div>';
 
-    const stageIdx = orderedIds().indexOf(id);
+    const rest = isRest(e);
+    const stageNum = stageNumbers()[id];
+    const hasRoute = e.track && e.track.length>1;
+    const showMap = hasRoute || !!e.restLoc;
+
+    const routeLine = rest
+      ? (e.start ? '<div class="stage-route" style="margin:calc(-1 * var(--s4)) 0 var(--s5);">'+esc(e.start)+'</div>' : '')
+      : '<div class="stage-route" style="margin:calc(-1 * var(--s4)) 0 var(--s5);">'+
+          esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+
+        '</div>';
 
     card.innerHTML =
       '<div class="day-head">'+
-        '<span class="day-num">Etappe '+String(stageIdx+1).padStart(2,'0')+'</span>'+
+        '<span class="day-num'+(rest?' is-rest':'')+'">'+stageLabel(stageNum)+'</span>'+
         '<span class="day-date">'+dateLabel+'</span>'+
       '</div>'+
-      '<div class="day-route">'+esc(e.stageTitle||'Naamloze etappe')+'</div>'+
-      '<div class="stage-route" style="margin:calc(-1 * var(--s4)) 0 var(--s5);">'+
-        esc(e.start||'?')+'<span class="arrow">→</span>'+esc(e.finish||'?')+
-      '</div>'+
+      '<div class="day-route">'+esc(e.stageTitle||(rest?'Naamloze rustdag':'Naamloze etappe'))+'</div>'+
+      routeLine+
       (e.photos && e.photos.length ? '<div class="photos">'+e.photos.map((p,i)=>'<img src="'+p+'" data-entry="'+id+'" data-idx="'+i+'">').join('')+'</div>' : '')+
-      (e.track && e.track.length>1 ? '<div class="map" id="map-'+id+'"></div>' : '')+
+      (showMap ? '<div class="map" id="map-'+id+'"></div>' : '')+
       dialHtml+
       '<div class="cat-content" id="catcontent-'+id+'"></div>'+
       '<div class="social" id="social-'+id+'"></div>'+
@@ -2412,9 +2479,12 @@
     body.appendChild(card);
     renderSocial(id);
 
-    if(e.track && e.track.length>1){
+    if(showMap){
       setTimeout(()=>{
-        dayMapInstances[id] = drawMap('map-'+id, e.track, {photos: e.photos, photoLocs: e.photoLocs});
+        const opts = {photos: e.photos, photoLocs: e.photoLocs};
+        dayMapInstances[id] = hasRoute
+          ? drawMap('map-'+id, e.track, opts)
+          : drawPointMap('map-'+id, e.restLoc, opts);
       }, 0);
     }
     renderCategoryContent(id, activeCat[id]);
@@ -2656,6 +2726,9 @@
     }
 
     // cat === '3'
+    // A rest day has no ride to measure, so the whole stats band is dropped
+    // rather than shown as eight em-dashes -- the counters below still apply.
+    const rest = isRest(e);
     let statsHtml = '<div class="stats-band"><div class="stats-row">';
     statsHtml += statBlock('kilometers', s.distanceKm!=null ? fmt(s.distanceKm,1) : '—');
     statsHtml += statBlock('hoogtemeters', s.elevGainM!=null ? fmt(s.elevGainM,0) : '—');
@@ -2684,7 +2757,7 @@
       counterBlock('food', 'lekkere dingen gegeten', esc(c3.lekkereDingen || '—'))+
       '</div>';
 
-    el.innerHTML = statsHtml + countersHtml + chartsHtml;
+    el.innerHTML = (rest ? '' : statsHtml) + countersHtml + chartsHtml;
 
     if(hasTrack){
       dayChartInstances[id] = renderCharts(id, e.track) || [];
@@ -2929,9 +3002,15 @@
     L.circleMarker(latlngs[0], {radius:5, color:'#5B6B36', fillColor:'#5B6B36', fillOpacity:1}).addTo(map);
     L.circleMarker(latlngs[latlngs.length-1], {radius:5, color:'#8670C9', fillColor:'#8670C9', fillOpacity:1}).addTo(map);
 
-    // Photo thumbnails where they were taken. Stage maps only -- the overview
-    // has its own stage pins and would get crowded. Silently absent for photos
-    // uploaded before EXIF was captured.
+    addPhotoPins(map, opts);
+
+    return map;
+  }
+
+  // Photo thumbnails where they were taken. Stage and rest-day maps only -- the
+  // overview has its own stage pins and would get crowded. Silently absent for
+  // photos uploaded before EXIF was captured.
+  function addPhotoPins(map, opts){
     const photos = (opts && opts.photos) || [];
     const locs = (opts && opts.photoLocs) || [];
     photos.forEach((src, i)=>{
@@ -2947,7 +3026,23 @@
         .addTo(map)
         .on('click', ()=> openLightbox(photos, i));
     });
+  }
 
+  // A rest day has coordinates but no route -- one pin, no line, sharing the
+  // basemaps (and the reader's basemap preference) with the stage maps.
+  function drawPointMap(elId, loc, opts){
+    const el = $(elId);
+    if(!el || !window.L || !loc || loc.lat==null || loc.lon==null) return;
+    const map = L.map(el, {zoomControl:true, attributionControl:true, scrollWheelZoom:false});
+    addBasemaps(map, el, 'kaart', 'og_base_stage');
+    // Zoom 11 is a "which town" level on purpose: the coordinates are typed by
+    // hand and only ever approximate.
+    map.setView([loc.lat, loc.lon], 11);
+    L.circleMarker([loc.lat, loc.lon], {
+      radius:7, color:'#fff', weight:3,
+      fillColor:'#8670C9', fillOpacity:1
+    }).addTo(map);
+    addPhotoPins(map, opts);
     return map;
   }
 
@@ -3216,6 +3311,41 @@
 
   // ---------- entry form ----------
   let highlightIdx = 0;
+
+  // The form is one form in two modes: a rest day has no route file, so
+  // everything derived from one disappears and the two place fields collapse
+  // into a single "where were you" field.
+  function applyRestMode(){
+    const rest = $('fRest').checked;
+    $('wTrack').hidden = rest;
+    $('wOverrides').hidden = rest;
+    $('wFinish').hidden = rest;
+    $('wRestLoc').hidden = !rest;
+    $('wBitterballen').hidden = !rest;
+    $('lStageTitle').textContent = rest ? 'Naam van de dag' : 'Etappenaam';
+    $('lStart').textContent = rest ? 'Waar was je?' : 'Vertrekpunt';
+    $('fStageTitle').placeholder = rest ? 'bijv. Luieren in Hanoi' : 'bijv. Gletsjerpas';
+    $('fStart').placeholder = rest ? 'bijv. Hanoi' : 'bijv. Ushuaia';
+    $('hCijfers').textContent = rest
+      ? 'Op een rustdag zijn er geen ritstatistieken — vul de tellers hieronder zelf in.'
+      : 'De route-statistieken (kilometers, vermogen, hartslag, bitterballen, etc.) worden automatisch berekend uit het routebestand hierboven.';
+  }
+  $('fRest').addEventListener('change', applyRestMode);
+
+  // Accepts "21.0278, 105.8342" (the shape Google Maps copies out). Returns
+  // undefined for a blank field -- meaning "no map" -- and null for something
+  // that was typed but doesn't parse, which the caller reports as an error.
+  function parseLatLon(raw){
+    const s = (raw||'').trim();
+    if(!s) return undefined;
+    const parts = s.split(',');
+    if(parts.length !== 2) return null;
+    const lat = parseFloat(parts[0]), lon = parseFloat(parts[1]);
+    if(isNaN(lat) || isNaN(lon)) return null;
+    if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return {lat, lon};
+  }
+
   function openEntryOverlay(entry){
     $('entryErr').style.display='none';
     editingEntryId = entry ? entry.id : null;
@@ -3236,6 +3366,11 @@
     $('fCat2Dieptepunt').value = entry ? ((entry.cat2&&entry.cat2.dieptepunt)||'') : '';
     $('fCat3Mooie').value = entry ? ((entry.cat3&&entry.cat3.mooieDingen)||'') : '';
     $('fCat3Lekkere').value = entry ? ((entry.cat3&&entry.cat3.lekkereDingen)||'') : '';
+    $('fBitterballen').value = (entry && entry.stats && entry.stats.bitterballen!=null) ? entry.stats.bitterballen : '';
+    $('fRest').checked = !!(entry && entry.kind === 'rest');
+    $('fRestLoc').value = (entry && entry.restLoc && entry.restLoc.lat!=null)
+      ? entry.restLoc.lat + ', ' + entry.restLoc.lon : '';
+    applyRestMode();
     $('fPhotos').value = '';
     highlightIdx = 0;
     pendingTrack = null;
@@ -3364,12 +3499,27 @@
     const date = $('fDate').value;
     if(!date){ errEl.textContent='Vul een datum in.'; errEl.style.display='block'; return; }
 
+    const isRestDay = $('fRest').checked;
+    const restLoc = isRestDay ? parseLatLon($('fRestLoc').value) : undefined;
+    if(restLoc === null){
+      errEl.textContent = 'Kon de locatie niet lezen — gebruik twee getallen gescheiden door een komma, bijv. 21.0278, 105.8342.';
+      errEl.style.display = 'block';
+      return;
+    }
+
     $('entrySave').disabled = true;
     $('entrySave').textContent = 'Bezig met opslaan...';
 
     try{
       let stats, track;
-      if(pendingTrack){
+      if(isRestDay){
+        // No ride, so no route and no ride-derived statistics -- even if this
+        // entry used to be an etappe and still has a stored track.
+        stats = {};
+        track = [];
+        const bb = parseFloat($('fBitterballen').value);
+        if(!isNaN(bb)) stats.bitterballen = bb;
+      } else if(pendingTrack){
         stats = Object.assign({}, pendingTrack.stats);
         track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
       } else if(existingTrackData){
@@ -3379,10 +3529,12 @@
         stats = {};
         track = [];
       }
-      const distOverride = parseFloat($('fDistOverride').value);
-      if(!isNaN(distOverride)) stats.distanceKm = distOverride;
-      const powerOverride = parseFloat($('fPowerOverride').value);
-      if(!isNaN(powerOverride)) stats.avgPower = powerOverride;
+      if(!isRestDay){
+        const distOverride = parseFloat($('fDistOverride').value);
+        if(!isNaN(distOverride)) stats.distanceKm = distOverride;
+        const powerOverride = parseFloat($('fPowerOverride').value);
+        if(!isNaN(powerOverride)) stats.avgPower = powerOverride;
+      }
 
       const photoFiles = Array.from($('fPhotos').files).slice(0,4);
       let photos, photoLocs;
@@ -3412,9 +3564,11 @@
       const id = editingEntryId || (date + '-' + Math.random().toString(36).slice(2,8));
       const entry = {
         id, date,
+        kind: isRestDay ? 'rest' : null,
         stageTitle: $('fStageTitle').value.trim(),
         start: $('fStart').value.trim(),
-        finish: $('fFinish').value.trim(),
+        finish: isRestDay ? '' : $('fFinish').value.trim(),
+        restLoc: restLoc || null,
         stats, track, photos, photoLocs,
         cat1: {
           title: $('fCat1Title').value.trim(),
