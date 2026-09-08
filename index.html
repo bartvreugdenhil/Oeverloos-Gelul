@@ -559,6 +559,39 @@
     border-right:5px solid transparent;
     border-top:6px solid var(--ground-dark);
   }
+  /* photo thumbnails pinned along a stage route */
+  .photo-pin{
+    position:absolute;
+    top:0;left:0;
+    transform:translate(-50%,-100%);
+    width:46px;height:46px;
+    border-radius:10px;
+    overflow:hidden;
+    border:2.5px solid #fff;
+    background:var(--olive);
+    cursor:pointer;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+  }
+  .photo-pin img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-pin::after{
+    content:'';
+    position:absolute;
+    left:50%;bottom:-7px;
+    transform:translateX(-50%);
+    border-left:5px solid transparent;
+    border-right:5px solid transparent;
+    border-top:7px solid #fff;
+  }
+  .ppick-geo{
+    position:absolute;left:2px;bottom:2px;
+    background:var(--accent);
+    color:#fff;
+    font-size:9px;
+    line-height:1;
+    padding:2px 4px;
+    border-radius:6px;
+  }
+
   .overview-tile-note{
     position:absolute;bottom:var(--s3);left:var(--s3);
     background:rgba(255,255,255,0.92);
@@ -744,8 +777,77 @@
     letter-spacing:0.09em;
     margin:0 0 var(--s2);
   }
-  .chart-block .chart-wrap{height:100px;position:relative;}
+  .chart-block .chart-wrap{height:100px;position:relative;overflow:hidden;}
   .chart-block canvas{width:100%!important;height:100%!important;}
+  .scrub-line{
+    position:absolute;
+    top:0;left:0;
+    width:2px;height:100%;
+    background:#C2410C;
+    pointer-events:none;
+    display:none;
+    will-change:transform;
+  }
+
+  /* scrubber */
+  .scrub{
+    margin:var(--s5) 0 var(--s4);
+    padding-top:var(--s5);
+    border-top:1px solid var(--sep);
+  }
+  .scrub-read{
+    display:flex;
+    flex-wrap:wrap;
+    gap:var(--s2) var(--s4);
+    margin-bottom:var(--s3);
+    font-size:var(--t-caps);
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .scrub-read b{
+    font-size:var(--t-h3);
+    font-weight:800;
+    letter-spacing:-0.02em;
+    color:var(--ink);
+    margin-right:2px;
+  }
+  .scrub input[type=range]{
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    height:24px;
+    background:transparent;
+    cursor:pointer;
+    display:block;
+  }
+  .scrub input[type=range]::-webkit-slider-runnable-track{
+    height:4px;
+    border-radius:var(--r-full);
+    background:var(--control-track);
+  }
+  .scrub input[type=range]::-moz-range-track{
+    height:4px;
+    border-radius:var(--r-full);
+    background:var(--control-track);
+  }
+  /* generous thumb: this is dragged with a thumb on a phone */
+  .scrub input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    appearance:none;
+    width:22px;height:22px;
+    margin-top:-9px;
+    border-radius:50%;
+    background:#C2410C;
+    border:3px solid var(--surface);
+    box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
+  .scrub input[type=range]::-moz-range-thumb{
+    width:22px;height:22px;
+    border-radius:50%;
+    background:#C2410C;
+    border:3px solid var(--surface);
+    box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
 
   /* three counters, three columns -- a 2-col grid would leave the third
      dangling on its own row (same orphan problem the KPI grid had) */
@@ -1426,6 +1528,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1473,6 +1576,8 @@
   let pendingTrack = null; // parsed track for the entry currently being created
   let editingEntryId = null; // id of the entry being edited, or null when adding a new one
   let existingPhotos = [];   // photos kept from an entry being edited, unless replaced
+  let existingPhotoLocs = []; // their map positions, kept in step with the above
+  let pendingPhotoMeta = []; // EXIF read from the files currently selected
   let existingTrackData = null; // {stats, track} kept from an entry being edited, unless replaced
   let overviewMapInstance = null;
   let dayMapInstances = {};
@@ -1673,7 +1778,7 @@
       const dataEnd = Math.min(headerSize + dataSize, fileSize);
 
       const BASE_SIZE = {0x00:1,0x01:1,0x02:1,0x83:2,0x84:2,0x85:4,0x86:4,0x07:1,0x88:4,0x89:8,0x0A:1,0x8B:2,0x8C:4,0x0D:1,0x8E:8,0x8F:8,0x90:8};
-      const FIELD_NAMES = {253:'timestamp',0:'lat',1:'lon',2:'altitude',3:'heart_rate',4:'cadence',6:'speed',7:'power',78:'enhanced_altitude'};
+      const FIELD_NAMES = {253:'timestamp',0:'lat',1:'lon',2:'altitude',3:'heart_rate',4:'cadence',6:'speed',7:'power',73:'enhanced_speed',78:'enhanced_altitude'};
 
       function readVal(le, type, off){
         switch(type){
@@ -1743,7 +1848,12 @@
             const power = (rec.power!=null && rec.power!==0xFFFF) ? rec.power : null;
             const cad = (rec.cadence!=null && rec.cadence!==0xFF) ? rec.cadence : null;
             const time = rec.timestamp!=null ? (rec.timestamp + 631065600)*1000 : null;
-            points.push({lat, lon, ele, time, hr, power, cad});
+            // The head unit's own speed (mm/s) beats differentiating GPS
+            // positions, which spikes wildly on signal glitches.
+            let devKmh = null;
+            if(rec.enhanced_speed!=null && rec.enhanced_speed!==0xFFFFFFFF) devKmh = rec.enhanced_speed*0.0036;
+            else if(rec.speed!=null && rec.speed!==0xFFFF) devKmh = rec.speed*0.0036;
+            points.push({lat, lon, ele, time, hr, power, cad, devKmh});
           }
         }
       }
@@ -1753,28 +1863,59 @@
     return points;
   }
 
-  // Annotates each point in-place with cumulative distance (d, km) and
-  // instantaneous speed (speedKmh) from the previous point. Segments with
-  // dt<0.3s are skipped for the speed calc (GPS/timestamp jitter) but still
-  // counted toward cumulative distance.
+  // No bike goes faster than this. Anything above it is a GPS artefact, not a
+  // descent -- a ~30m position jump across a 0.3s gap computes to 360 km/h, and
+  // that is exactly what put 390 km/h into a stage's stats.
+  const MAX_PLAUSIBLE_KMH = 80;
+
+  // Annotates each point in-place with cumulative distance (d, km) and speed
+  // (speedKmh). Speed comes from the head unit when the file carries it,
+  // because a wheel sensor or filtered GPS solution is far steadier than
+  // differentiating raw positions. Falling back to positions, the sample is
+  // taken over at least MIN_SPEED_DT_S of travel rather than whatever gap
+  // happens to separate two records, and implausible results are dropped.
+  const MIN_SPEED_DT_S = 3;
+
   function annotateDistanceSpeed(points){
     let cum = 0;
     points[0].d = 0;
-    points[0].speedKmh = null;
+    points[0].speedKmh = points[0].devKmh!=null ? points[0].devKmh : null;
+
+    // anchor for the fallback window: last point far enough back in time
+    let anchor = 0;
+    let anchorKm = 0;
+
     for(let i=1;i<points.length;i++){
       const a=points[i-1], b=points[i];
       const segKm = haversine(a.lat,a.lon,b.lat,b.lon);
       cum += segKm;
       b.d = cum;
+
+      if(b.devKmh!=null){
+        b.speedKmh = b.devKmh <= MAX_PLAUSIBLE_KMH ? b.devKmh : null;
+        anchor = i; anchorKm = cum;
+        continue;
+      }
+
       let speedKmh = null;
-      if(a.time!=null && b.time!=null){
-        const dtH = (b.time-a.time)/3600000;
-        if(dtH*3600 >= 0.3) speedKmh = segKm/dtH;
+      const t0 = points[anchor].time, t1 = b.time;
+      if(t0!=null && t1!=null){
+        const dtS = (t1-t0)/1000;
+        if(dtS >= MIN_SPEED_DT_S){
+          const v = (cum-anchorKm)/(dtS/3600);
+          speedKmh = v <= MAX_PLAUSIBLE_KMH ? v : null;
+          anchor = i; anchorKm = cum;
+        } else {
+          // still inside the window -- carry the last good value so the trace
+          // stays continuous instead of gapping between samples
+          speedKmh = a.speedKmh!=null ? a.speedKmh : null;
+        }
       }
       b.speedKmh = speedKmh;
     }
     return points;
   }
+
 
   function fmtDuration(min){
     if(min==null || isNaN(min)) return '—';
@@ -1883,6 +2024,74 @@
       calorieKcal: calorieKcal,
       bitterballen: calorieKcal!=null ? Math.round(calorieKcal/65) : null
     };
+  }
+
+  // ---------- photo location (EXIF) ----------
+  // compressImage draws through a canvas, which destroys EXIF, so metadata has
+  // to be read from the original File before that happens.
+  function dmsToDeg(dms, ref){
+    if(!dms || dms.length < 3) return null;
+    const d = Number(dms[0]), m = Number(dms[1]), s = Number(dms[2]);
+    if(isNaN(d) || isNaN(m) || isNaN(s)) return null;
+    const v = d + m/60 + s/3600;
+    return (ref === 'S' || ref === 'W') ? -v : v;
+  }
+
+  // "YYYY:MM:DD HH:MM:SS" -- a local wall clock with no zone attached
+  function exifTime(str){
+    const m = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(str || '');
+    return m ? Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]) : null;
+  }
+
+  function readPhotoMeta(file){
+    return new Promise(resolve=>{
+      if(!window.EXIF){ resolve(null); return; }
+      try{
+        EXIF.getData(file, function(){
+          const lat = dmsToDeg(EXIF.getTag(this,'GPSLatitude'), EXIF.getTag(this,'GPSLatitudeRef'));
+          const lon = dmsToDeg(EXIF.getTag(this,'GPSLongitude'), EXIF.getTag(this,'GPSLongitudeRef'));
+          const t = exifTime(EXIF.getTag(this,'DateTimeOriginal') || EXIF.getTag(this,'DateTime'));
+          resolve({lat: lat, lon: lon, t: t});
+        });
+      }catch(err){
+        console.warn('EXIF read failed', err);
+        resolve(null);
+      }
+    });
+  }
+
+  // Fallback when a photo carries a timestamp but no GPS. The EXIF clock is
+  // local with no offset while track timestamps are UTC, so try whole-hour
+  // offsets and keep the smallest one that lands the photo inside the ride --
+  // guessing a position from an unmatched time would be worse than none.
+  function locateByTime(tNaive, points){
+    if(tNaive == null || !points || !points.length) return null;
+    const withTime = points.filter(p=>p.time!=null && p.lat!=null && p.lon!=null);
+    if(!withTime.length) return null;
+    const start = withTime[0].time, end = withTime[withTime.length-1].time;
+    const slack = 30*60*1000;
+    let bestOff = null;
+    for(let off=-12; off<=14; off++){
+      const t = tNaive - off*3600000;
+      if(t >= start-slack && t <= end+slack){
+        if(bestOff===null || Math.abs(off) < Math.abs(bestOff)) bestOff = off;
+      }
+    }
+    if(bestOff === null) return null;
+    const t = tNaive - bestOff*3600000;
+    let nearest = null, bestD = Infinity;
+    withTime.forEach(p=>{
+      const d = Math.abs(p.time - t);
+      if(d < bestD){ bestD = d; nearest = p; }
+    });
+    return nearest ? {lat: nearest.lat, lon: nearest.lon} : null;
+  }
+
+  // GPS first, capture time second, nothing third.
+  function resolvePhotoLoc(meta, points){
+    if(!meta) return null;
+    if(meta.lat != null && meta.lon != null) return {lat: meta.lat, lon: meta.lon};
+    return locateByTime(meta.t, points);
   }
 
   // ---------- image compression ----------
@@ -2204,7 +2413,9 @@
     renderSocial(id);
 
     if(e.track && e.track.length>1){
-      setTimeout(()=>{ dayMapInstances[id] = drawMap('map-'+id, e.track, true); }, 0);
+      setTimeout(()=>{
+        dayMapInstances[id] = drawMap('map-'+id, e.track, {photos: e.photos, photoLocs: e.photoLocs});
+      }, 0);
     }
     renderCategoryContent(id, activeCat[id]);
 
@@ -2458,7 +2669,14 @@
     statsHtml += '</div></div>';
 
 
-    const chartsHtml = (e.track && e.track.length>1) ? '<div class="charts" id="charts-'+id+'"></div>' : '';
+    const hasTrack = e.track && e.track.length>1;
+    const chartsHtml = hasTrack
+      ? '<div class="scrub" id="scrub-'+id+'">'+
+          '<div class="scrub-read" id="scrubRead-'+id+'"></div>'+
+          '<input type="range" id="scrubRange-'+id+'" min="0" max="'+(e.track.length-1)+'" value="0" step="1" aria-label="Sleep over de route">'+
+        '</div>'+
+        '<div class="charts" id="charts-'+id+'"></div>'
+      : '';
 
     const countersHtml = '<div class="counters">'+
       counterBlock('flame', 'bitterballen verbrand', s.bitterballen!=null ? s.bitterballen : '—')+
@@ -2468,9 +2686,71 @@
 
     el.innerHTML = statsHtml + countersHtml + chartsHtml;
 
-    if(e.track && e.track.length>1){
+    if(hasTrack){
       dayChartInstances[id] = renderCharts(id, e.track) || [];
+      setupScrubber(id, e.track);
     }
+  }
+
+  // One slider drives a crosshair on every chart plus a marker on the route map.
+  // The crosshair is a positioned div per chart rather than something drawn into
+  // the canvas: redrawing four Chart.js instances on every input event is
+  // visibly janky on a phone, whereas moving four divs costs nothing.
+  function setupScrubber(id, track){
+    const range = $('scrubRange-'+id);
+    const read = $('scrubRead-'+id);
+    if(!range || !read) return;
+
+    const charts = dayChartInstances[id] || [];
+    const lines = [];
+    charts.forEach(ch=>{
+      const wrap = ch.canvas.parentNode;
+      const line = document.createElement('div');
+      line.className = 'scrub-line';
+      wrap.appendChild(line);
+      lines.push({chart: ch, el: line});
+    });
+
+    function fmtVal(v, digits, unit){
+      return v==null ? '—' : fmt(v, digits)+unit;
+    }
+
+    function apply(i){
+      const p = track[i];
+      if(!p) return;
+
+      read.innerHTML =
+        '<span><b>'+fmt(p.d,1)+'</b> km</span>'+
+        '<span><b>'+fmtVal(p.ele,0,'')+'</b> m</span>'+
+        '<span><b>'+fmtVal(p.speedKmh,1,'')+'</b> km/h</span>'+
+        '<span><b>'+fmtVal(p.power,0,'')+'</b> W</span>'+
+        '<span><b>'+fmtVal(p.hr,0,'')+'</b> bpm</span>';
+
+      lines.forEach(l=>{
+        const sx = l.chart.scales.x;
+        const x = sx.getPixelForValue(p.d);
+        // hide rather than clamp when the point falls outside the plot area
+        if(x < sx.left - 1 || x > sx.right + 1){ l.el.style.display = 'none'; return; }
+        l.el.style.display = 'block';
+        l.el.style.transform = 'translateX('+x+'px)';
+      });
+
+      const map = dayMapInstances[id];
+      if(map && p.lat!=null && p.lon!=null){
+        if(!map._scrubMarker){
+          map._scrubMarker = L.circleMarker([p.lat,p.lon], {
+            radius:7, color:'#fff', weight:3,
+            fillColor:'#C2410C', fillOpacity:1
+          }).addTo(map);
+        } else {
+          map._scrubMarker.setLatLng([p.lat,p.lon]);
+        }
+      }
+    }
+
+    range.addEventListener('input', ()=> apply(parseInt(range.value,10)));
+    // charts size themselves on the next frame, so read pixel positions after
+    requestAnimationFrame(()=> apply(0));
   }
 
   function renderCharts(id, track){
@@ -2522,7 +2802,10 @@
           responsive:true,
           maintainAspectRatio:false,
           animation:false,
-          plugins:{ legend:{display:false}, tooltip:{enabled:true} },
+          // No tooltip: the shared scrubber below the charts reads all four at
+          // once, which a tooltip can't, and hovering doesn't exist on a phone.
+          plugins:{ legend:{display:false}, tooltip:{enabled:false} },
+          events:[],
           scales:{
             x:{
               type:'linear',
@@ -2534,6 +2817,11 @@
               border:{ color:gridColor }
             },
             y:{
+              // Pin every chart's axis to the same width so all four plot areas
+              // start at the same x. Left to itself, "3.000" reserves more room
+              // than "60" and the scrubber's crosshairs step raggedly across
+              // the stack instead of reading as one line.
+              afterFit: (scale)=>{ scale.width = 46; },
               ticks:{ maxTicksLimit:4, color:tickColor, font:{size:10, family:'Inter'} },
               grid:{ color:gridColor },
               border:{ display:false }
@@ -2625,7 +2913,7 @@
     };
   }
 
-  function drawMap(elId, track, isSmall){
+  function drawMap(elId, track, opts){
     const el = $(elId);
     if(!el || !window.L) return;
     const map = L.map(el, {zoomControl:true, attributionControl:true, scrollWheelZoom:false});
@@ -2634,12 +2922,32 @@
     // Road map by default here: on an individual stage the reader wants to see
     // which roads and towns the route actually went through.
     addBasemaps(map, el, 'kaart', 'og_base_stage');
-    L.polyline(latlngs, {color:'#fff', weight:9, opacity:0.9}).addTo(map);
-    const line = L.polyline(latlngs, {color:'#8670C9', weight:7, opacity:0.95}).addTo(map);
+    L.polyline(latlngs, {color:'#fff', weight:7, opacity:0.9}).addTo(map);
+    const line = L.polyline(latlngs, {color:'#8670C9', weight:5, opacity:0.95}).addTo(map);
     map._routeBounds = line.getBounds();
     map.fitBounds(map._routeBounds, {padding:[16,16]});
     L.circleMarker(latlngs[0], {radius:5, color:'#5B6B36', fillColor:'#5B6B36', fillOpacity:1}).addTo(map);
     L.circleMarker(latlngs[latlngs.length-1], {radius:5, color:'#8670C9', fillColor:'#8670C9', fillOpacity:1}).addTo(map);
+
+    // Photo thumbnails where they were taken. Stage maps only -- the overview
+    // has its own stage pins and would get crowded. Silently absent for photos
+    // uploaded before EXIF was captured.
+    const photos = (opts && opts.photos) || [];
+    const locs = (opts && opts.photoLocs) || [];
+    photos.forEach((src, i)=>{
+      const loc = locs[i];
+      if(!loc || loc.lat==null || loc.lon==null) return;
+      const icon = L.divIcon({
+        className: 'photo-pin-wrap',
+        html: '<div class="photo-pin"><img src="'+src+'"></div>',
+        iconSize: [0,0],
+        iconAnchor: [0,0]
+      });
+      L.marker([loc.lat, loc.lon], {icon: icon})
+        .addTo(map)
+        .on('click', ()=> openLightbox(photos, i));
+    });
+
     return map;
   }
 
@@ -2679,8 +2987,8 @@
       const isLatest = idx === ids.length - 1;
       const routeColor = isLatest ? '#C2410C' : '#8670C9';
       const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
-      L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?9:8, opacity:0.85}).addTo(map);
-      L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?7:6, opacity:0.95}).addTo(map);
+      L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?7:6, opacity:0.85}).addTo(map);
+      L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?5:4, opacity:0.95}).addTo(map);
 
       const e = entries[id];
       const routeLabel = (e.start||'?') + ' → ' + (e.finish||'?');
@@ -2817,6 +3125,43 @@
   }
   function renderDailyCard(){ renderEditableCard('dailyCardWrap', 'dailyCard', manifest && manifest.dailyThought, DAILY_PLACEHOLDER); }
 
+  // One-off repair for stages logged before the speed fix, whose stats carry a
+  // GPS-glitch maximum (390 km/h on one). Recomputes from the stored track,
+  // ignoring samples above the plausibility ceiling. Writes are owner-only, so
+  // this can only run while signed in. Idempotent: entries already below the
+  // ceiling are skipped, so a second pass does nothing.
+  let backfilledSpeeds = false;
+  async function backfillMaxSpeeds(){
+    // auth can resolve before init() has finished loading entries, so don't
+    // burn the once-only flag on an empty set -- init calls this again after.
+    if(backfilledSpeeds || !manifest || !editUnlocked) return;
+    if(!Object.keys(entries).length) return;
+    backfilledSpeeds = true;
+    let fixed = 0;
+    for(const id of Object.keys(entries)){
+      const e = entries[id];
+      const s = e && e.stats;
+      if(!s || s.maxSpeedKmh==null || s.maxSpeedKmh <= MAX_PLAUSIBLE_KMH) continue;
+      if(!e.track || !e.track.length) continue;
+      let max = null;
+      e.track.forEach(p=>{
+        if(p.speedKmh!=null && p.speedKmh <= MAX_PLAUSIBLE_KMH && (max===null || p.speedKmh>max)) max = p.speedKmh;
+      });
+      if(max===null) continue;
+      const was = s.maxSpeedKmh;
+      s.maxSpeedKmh = max;
+      try{
+        await saveEntryData(id, e);
+        fixed++;
+        console.info('max speed hersteld voor '+id+': '+was.toFixed(1)+' -> '+max.toFixed(1)+' km/h');
+      }catch(err){
+        s.maxSpeedKmh = was; // put it back so the UI keeps matching the database
+        console.error('backfill failed for '+id, err);
+      }
+    }
+    if(fixed) renderTimeline();
+  }
+
   function onSignedIn(){
     editUnlocked = true;
     $('signOutRow').style.display='block';
@@ -2824,6 +3169,7 @@
     renderIntroCard();
     renderDailyCard();
     if(manifest) renderTimeline();
+    backfillMaxSpeeds();
   }
   function onSignedOut(){
     editUnlocked = false;
@@ -2894,7 +3240,9 @@
     highlightIdx = 0;
     pendingTrack = null;
 
+    pendingPhotoMeta = [];
     existingPhotos = (entry && entry.photos) ? entry.photos.slice() : [];
+    existingPhotoLocs = (entry && entry.photoLocs) ? entry.photoLocs.slice() : [];
     existingTrackData = (entry && entry.track && entry.track.length>1) ? {stats: entry.stats||{}, track: entry.track} : null;
 
     const preview = $('photoPreview');
@@ -2940,6 +3288,24 @@
     highlightIdx = 0;
     const preview = $('photoPreview');
     preview.innerHTML = '';
+
+    // read EXIF now, from the originals -- compressImage will destroy it
+    pendingPhotoMeta = new Array(files.length).fill(null);
+    files.forEach((f, i)=>{
+      readPhotoMeta(f).then(meta=>{
+        pendingPhotoMeta[i] = meta;
+        const loc = resolvePhotoLoc(meta, pendingTrack && pendingTrack.points);
+        const tag = preview.querySelectorAll('.ppick')[i];
+        if(tag && loc){
+          const dot = document.createElement('span');
+          dot.className = 'ppick-geo';
+          dot.textContent = '◉';
+          dot.title = 'Locatie gevonden — komt op de kaart';
+          tag.appendChild(dot);
+        }
+      });
+    });
+
     files.forEach((f, i)=>{
       const url = URL.createObjectURL(f);
       const pick = document.createElement('div');
@@ -3019,19 +3385,28 @@
       if(!isNaN(powerOverride)) stats.avgPower = powerOverride;
 
       const photoFiles = Array.from($('fPhotos').files).slice(0,4);
-      let photos;
+      let photos, photoLocs;
       if(photoFiles.length){
-        photos = [];
-        for(const f of photoFiles){
-          const b64 = await compressImage(f, 900, 0.6);
-          photos.push(b64);
+        // keep each photo married to its location through the highlight
+        // reorder below -- two parallel arrays would drift apart
+        const pairs = [];
+        for(let i=0;i<photoFiles.length;i++){
+          const b64 = await compressImage(photoFiles[i], 900, 0.6);
+          const meta = pendingPhotoMeta[i] || await readPhotoMeta(photoFiles[i]);
+          pairs.push({
+            b64: b64,
+            loc: resolvePhotoLoc(meta, pendingTrack && pendingTrack.points)
+          });
         }
-        if(highlightIdx > 0 && highlightIdx < photos.length){
-          const [h] = photos.splice(highlightIdx, 1);
-          photos.unshift(h);
+        if(highlightIdx > 0 && highlightIdx < pairs.length){
+          const [h] = pairs.splice(highlightIdx, 1);
+          pairs.unshift(h);
         }
+        photos = pairs.map(p=>p.b64);
+        photoLocs = pairs.map(p=>p.loc || null);
       } else {
         photos = existingPhotos;
+        photoLocs = existingPhotoLocs;
       }
 
       const id = editingEntryId || (date + '-' + Math.random().toString(36).slice(2,8));
@@ -3040,7 +3415,7 @@
         stageTitle: $('fStageTitle').value.trim(),
         start: $('fStart').value.trim(),
         finish: $('fFinish').value.trim(),
-        stats, track, photos,
+        stats, track, photos, photoLocs,
         cat1: {
           title: $('fCat1Title').value.trim(),
           text: $('fCat1Text').value
@@ -3192,6 +3567,7 @@
     loadSeenIds(); // needs entries loaded, to seed a first-time visitor
 
     renderTimeline();
+    backfillMaxSpeeds(); // no-op unless signed in and something needs repairing
   }
 
   window.addEventListener('error', (e)=>{
