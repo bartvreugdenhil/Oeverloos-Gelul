@@ -35,6 +35,7 @@
     --lilac-bg:#F4F1FB;
     --beige:#D8C39A;
     --beige-deep:#A6793C;
+    --beige-deep-rgb:166,121,60;
     --beige-tint:#F8F1E2;
     --olive:#5B6B36;
     --olive-deep:#414C27;
@@ -216,25 +217,35 @@
     font:inherit;font-weight:600;cursor:pointer;
   }
 
-  /* ---------- 2. intro ---------- */
-  /* Native <details>, so the toggle needs no JS and stays keyboard-accessible. */
+  /* ---------- 2. glowing panels (intro, vrije associatie) ---------- */
+  /* One card design used twice: the intro is a native <details>, so its toggle
+     needs no JS and stays keyboard-accessible, and the daily thought is the
+     same thing as a plain div (.is-static) that is always open. The hue is a
+     custom property so a panel can be re-themed without duplicating the rules. */
   .intro-details{
+    --glow-rgb:var(--ground-dark-rgb);
+    --panel-ink:var(--ground-dark);
     background:var(--surface);
     border-radius:var(--r-lg);
     padding:var(--s4) var(--s5);
-    /* Lilac glow: a faint ring to define the edge, then two diffuse layers so
+    /* The glow: a faint ring to define the edge, then two diffuse layers so
        the colour reads as light coming off the card rather than a border. */
     box-shadow:
-      0 0 0 1px rgba(var(--ground-dark-rgb),0.13),
-      0 2px 10px rgba(var(--ground-dark-rgb),0.13),
-      0 8px 30px rgba(var(--ground-dark-rgb),0.20);
+      0 0 0 1px rgba(var(--glow-rgb),0.13),
+      0 2px 10px rgba(var(--glow-rgb),0.13),
+      0 8px 30px rgba(var(--glow-rgb),0.20);
     transition:box-shadow 0.25s ease;
   }
-  .intro-details[open]{
+  .intro-details[open],
+  .intro-details.is-static{
     box-shadow:
-      0 0 0 1px rgba(var(--ground-dark-rgb),0.18),
-      0 2px 12px rgba(var(--ground-dark-rgb),0.16),
-      0 10px 36px rgba(var(--ground-dark-rgb),0.24);
+      0 0 0 1px rgba(var(--glow-rgb),0.18),
+      0 2px 12px rgba(var(--glow-rgb),0.16),
+      0 10px 36px rgba(var(--glow-rgb),0.24);
+  }
+  .intro-details.theme-beige{
+    --glow-rgb:var(--beige-deep-rgb);
+    --panel-ink:var(--beige-deep);
   }
   .intro-summary{
     list-style:none;
@@ -247,19 +258,22 @@
     font-size:var(--t-h3);
     font-weight:700;
     letter-spacing:-0.01em;
-    color:var(--ground-dark);
+    color:var(--panel-ink);
   }
   .intro-summary::-webkit-details-marker{display:none;}
   .intro-summary::after{
     content:'';
     flex-shrink:0;
     width:8px;height:8px;
-    border-right:2px solid var(--ground-dark);
-    border-bottom:2px solid var(--ground-dark);
+    border-right:2px solid var(--panel-ink);
+    border-bottom:2px solid var(--panel-ink);
     transform:translateY(-2px) rotate(45deg);
     transition:transform 0.2s ease;
   }
   .intro-details[open] .intro-summary::after{transform:translateY(2px) rotate(-135deg);}
+  /* Permanently expanded, so nothing to click and no chevron to point anywhere. */
+  .intro-details.is-static .intro-summary{cursor:default;}
+  .intro-details.is-static .intro-summary::after{content:none;}
   .intro-card{
     font-family:var(--font-display);
     font-size:var(--t-body);
@@ -471,32 +485,6 @@
   /* ---------- 6. daily note ---------- */
   /* Sits directly under the dark stats band, so it needs real lift to read as
      a card resting on the page rather than another flat section. */
-  .titled-card{
-    background:var(--surface);
-    border-radius:var(--r-lg);
-    padding:var(--s5);
-    border-left:4px solid var(--beige-deep);
-    box-shadow:0 10px 30px rgba(28,28,30,0.13), 0 2px 6px rgba(28,28,30,0.07);
-  }
-  .titled-card .cat-title{
-    font-family:var(--font-body);
-    font-size:var(--t-caps);
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.09em;
-    color:var(--beige-deep);
-    margin:0 0 var(--s3);
-  }
-  .titled-card .editable-text{
-    outline:none;
-    white-space:pre-wrap;
-    font-family:var(--font-display);
-    font-size:var(--t-h3);
-    line-height:1.5;
-    color:var(--ink);
-  }
-  .titled-card .editable-text.empty{color:var(--ink-soft);font-style:italic;}
-
   .overview-empty{
     padding:var(--s7) var(--s5);
     text-align:center;
@@ -1374,9 +1362,9 @@
 
   <section class="section">
     <div class="section-inner">
-      <div class="titled-card" id="dailyCardWrap">
-        <div class="cat-title">Vrije associatie van de dag</div>
-        <div class="editable-text" id="dailyCard"></div>
+      <div class="intro-details is-static theme-beige" id="dailyCardWrap">
+        <div class="intro-summary">Vrije associatie van de dag</div>
+        <div class="intro-card" id="dailyCard"></div>
       </div>
     </div>
   </section>
