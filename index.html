@@ -561,6 +561,9 @@
     border-right:5px solid transparent;
     border-top:6px solid var(--ground-dark);
   }
+  /* a rest day's pin, olive to read as "stood still here" against the stages */
+  .stage-pin.is-rest .label{background:var(--olive-deep);}
+  .stage-pin.is-rest .label::after{border-top-color:var(--olive-deep);}
   /* photo thumbnails pinned along a stage route */
   .photo-pin{
     position:absolute;
@@ -2359,8 +2362,8 @@
   function renderStageList(){
     const el = $('stageList');
     if(!el) return;
-    // Unfiltered on purpose: the overview map can only show stages that have a
-    // track, so this list is the only way to reach a track-less entry.
+    // Unfiltered on purpose: the overview map needs either a route or typed
+    // coordinates, so this list is the only way to reach an entry with neither.
     const ids = orderedIds();
 
     if(!ids.length){
@@ -3054,11 +3057,19 @@
       overviewMapInstance = null;
     }
 
-    const ids = orderedIds().filter(id => entries[id].track && entries[id].track.length>1);
+    // A stage needs a route to draw; a rest day needs only the coordinates it
+    // was given. One without either has nothing to place, so it stays off.
+    function hasRoute(e){ return !!(e.track && e.track.length>1); }
+    function restPin(e){ return (!hasRoute(e) && isRest(e) && e.restLoc && e.restLoc.lat!=null) ? e.restLoc : null; }
+
+    const ids = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
     if(ids.length===0){
       el.innerHTML = '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
       return;
     }
+    // "Newest" means the newest ride: a rest day draws no line to highlight.
+    const rideIds = ids.filter(id => hasRoute(entries[id]));
+    const latestRideId = rideIds[rideIds.length-1];
 
     const map = L.map(el, {zoomControl:true, attributionControl:true});
     overviewMapInstance = map;
@@ -3070,33 +3081,44 @@
     const allBounds = [];
     const pinEls = [];
 
-    ids.forEach((id, idx)=>{
-      const track = entries[id].track;
-      const start = track.find(p=>p.lat!=null && p.lon!=null);
-      if(!start) return;
-      stagePoints.push([start.lat, start.lon]);
-      track.forEach(p=>{ if(p.lat!=null&&p.lon!=null) allBounds.push([p.lat,p.lon]); });
-
-      // The most recent stage gets a warm contrasting line so the newest leg of
-      // the trip reads at a glance against the lilac of everything before it.
-      const isLatest = idx === ids.length - 1;
-      const routeColor = isLatest ? '#C2410C' : '#8670C9';
-      const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
-      L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?6:5, opacity:0.85}).addTo(map);
-      L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?4:3, opacity:0.95}).addTo(map);
-
+    ids.forEach(id=>{
       const e = entries[id];
-      const routeLabel = (e.start||'?') + ' → ' + (e.finish||'?');
+      const rest = restPin(e);
+
+      // Where the pin goes: a stage sits at the point its route starts from, a
+      // rest day at the coordinates that were typed in.
+      let anchor;
+      if(rest){
+        anchor = [rest.lat, rest.lon];
+        allBounds.push(anchor);
+      } else {
+        const track = e.track;
+        const start = track.find(p=>p.lat!=null && p.lon!=null);
+        if(!start) return;
+        anchor = [start.lat, start.lon];
+        track.forEach(p=>{ if(p.lat!=null&&p.lon!=null) allBounds.push([p.lat,p.lon]); });
+
+        // The most recent stage gets a warm contrasting line so the newest leg of
+        // the trip reads at a glance against the lilac of everything before it.
+        const isLatest = id === latestRideId;
+        const routeColor = isLatest ? '#C2410C' : '#8670C9';
+        const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
+        L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?6:5, opacity:0.85}).addTo(map);
+        L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?4:3, opacity:0.95}).addTo(map);
+      }
+      stagePoints.push(anchor);
+
+      const routeLabel = rest ? (e.start || 'Rustdag') : (e.start||'?') + ' → ' + (e.finish||'?');
       const titleText = esc(e.stageTitle ? e.stageTitle : routeLabel);
       const hasPhoto = e.photos && e.photos.length;
       const thumb = hasPhoto ? '<img class="thumb" src="'+e.photos[0]+'">' : '';
       const icon = L.divIcon({
         className:'stage-pin-wrap',
-        html:'<div class="stage-pin'+(hasPhoto?'':' no-photo')+'">'+thumb+'<div class="label">'+titleText+'</div></div>',
+        html:'<div class="stage-pin'+(hasPhoto?'':' no-photo')+(rest?' is-rest':'')+'">'+thumb+'<div class="label">'+titleText+'</div></div>',
         iconSize:[0,0],
         iconAnchor:[0,0]
       });
-      const marker = L.marker([start.lat, start.lon], {icon}).addTo(map);
+      const marker = L.marker(anchor, {icon}).addTo(map);
       marker.on('click', ()=> goToEntry(id));
       const pinEl = marker.getElement() && marker.getElement().querySelector('.stage-pin');
       if(pinEl) pinEls.push(pinEl);
