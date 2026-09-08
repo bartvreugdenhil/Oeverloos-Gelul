@@ -232,6 +232,14 @@
   }
   #signOutRow{margin-top:var(--s4);font-size:var(--t-small);}
   #backupRow{margin-top:var(--s2);font-size:var(--t-small);}
+  #commentBadgeRow{
+    margin-top:var(--s2);
+    font-size:var(--t-caps);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--on-dark-accent);
+  }
   #signOutRow button,
   #backupRow button{
     background:none;border:none;padding:0;
@@ -1166,6 +1174,31 @@
     font-size:var(--t-small);
     font-family:var(--font-body);
   }
+  .draft-bar{
+    background:var(--beige-tint);
+    border:1px solid var(--beige);
+    border-radius:var(--r-md);
+    padding:var(--s3);
+    margin-bottom:var(--s4);
+  }
+  .draft-bar-text{
+    font-size:var(--t-caps);
+    line-height:1.5;
+    color:var(--ink);
+    margin-bottom:var(--s2);
+  }
+  .draft-bar-actions{display:flex;gap:var(--s3);}
+  .draft-bar-actions button{
+    background:none;border:none;padding:0;
+    font:inherit;
+    font-size:var(--t-caps);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    cursor:pointer;
+    color:var(--beige-deep);
+  }
+  .draft-bar-actions button#draftDiscard{color:var(--ink-soft);}
   .checkfield label{
     display:flex;
     align-items:center;
@@ -1374,6 +1407,7 @@
     <div class="hero-rule"></div>
     <div id="signOutRow" style="display:none;"><button id="signOutBtn">Ingelogd — uitloggen</button></div>
     <div id="backupRow" style="display:none;"><button id="backupBtn">Back-up downloaden</button></div>
+    <div id="commentBadgeRow" style="display:none;"></div>
   </div>
 </header>
 
@@ -1483,6 +1517,14 @@
     <h2 id="entryFormTitle">Nieuwe reisbeweging</h2>
     <div class="sheet-sub">Exporteer een GPX-, TCX- of FIT-bestand uit de app van je fietscomputer voor de rit van vandaag, en vul de rest aan.</div>
 
+    <div class="draft-bar" id="draftBar" hidden>
+      <div class="draft-bar-text" id="draftBarText"></div>
+      <div class="draft-bar-actions">
+        <button type="button" id="draftRestore">Herstellen</button>
+        <button type="button" id="draftDiscard">Weggooien</button>
+      </div>
+    </div>
+
     <h3>Basis</h3>
     <div class="two-col">
       <div class="field">
@@ -1578,7 +1620,7 @@
 
     <h3>Foto's</h3>
     <div class="field">
-      <label>Foto's (max 4, automatisch gecomprimeerd)</label>
+      <label>Foto's (max 10, automatisch gecomprimeerd)</label>
       <input type="file" id="fPhotos" accept="image/*" multiple>
       <div class="hint">Nieuwe foto's komen bij de bestaande. De omslagfoto (★) is de foto die op de kaart, in de lijst en bovenaan de pagina verschijnt.</div>
       <div class="photo-preview" id="photoPreview"></div>
@@ -1671,9 +1713,12 @@
   let likesByEntry = {};      // entryId -> [uid, ...]
   let commentsByEntry = {};   // entryId -> [{id, uid, name, text, ts}, ...]
   let seenIds = [];           // entry ids this visitor has already seen
+  let seenCommentIds = [];    // comment ids already surfaced to the owner
 
   const SEEN_KEY = 'og_seen_entry_ids';
+  const SEEN_COMMENTS_KEY = 'og_seen_comment_ids';
   const NAME_KEY = 'og_visitor_name';
+  const DRAFT_KEY = 'og_entry_draft';
 
   function lsGet(key){
     try{ return localStorage.getItem(key); }catch(e){ return null; }
@@ -1706,6 +1751,62 @@
   }
   async function deleteEntryData(id){
     await db.collection('entries').doc(id).delete();
+  }
+
+  // ---------- route points ----------
+  // Kept out of the entry document: a 300-point track is ~30KB and made up 95%
+  // of the payload once photos moved to Storage, yet the overview only ever
+  // draws the coarse routePreview that stays on the entry. Fetched when a stage
+  // is actually opened.
+  const ROUTE_PREVIEW_POINTS = 40;
+  let trackCache = {};
+
+  function routePreviewFrom(track){
+    if(!track || track.length < 2) return [];
+    return downsample(track, ROUTE_PREVIEW_POINTS)
+      .filter(p=>p && p.lat!=null && p.lon!=null)
+      .map(p=>({lat:p.lat, lon:p.lon}));
+  }
+
+  // True when a stage has a route at all, without needing it loaded: either
+  // still inline (not yet migrated) or represented by its preview.
+  function entryHasTrack(e){
+    if(!e) return false;
+    if(e.track && e.track.length > 1) return true;
+    return !!(e.routePreview && e.routePreview.length > 1);
+  }
+  // What the overview map draws -- preview first, inline track as the fallback
+  // for anything not yet migrated.
+  function entryRouteLine(e){
+    if(e && e.routePreview && e.routePreview.length > 1) return e.routePreview;
+    return (e && e.track) || [];
+  }
+
+  async function saveTrackData(id, track){
+    await db.collection('tracks').doc(id).set({track: track});
+  }
+  async function deleteTrackData(id){
+    try{ await db.collection('tracks').doc(id).delete(); }
+    catch(e){ console.warn('kon route niet verwijderen', e); }
+  }
+
+  // Resolves to the full point list for a stage, from whichever place holds it.
+  async function ensureTrack(id){
+    const e = entries[id];
+    if(!e) return [];
+    if(e.track && e.track.length > 1) return e.track;   // not yet migrated
+    if(!entryHasTrack(e)) return [];                    // rest day, or no route
+    if(trackCache[id]) return trackCache[id];
+    try{
+      const snap = await db.collection('tracks').doc(id).get();
+      const data = snap.exists ? snap.data() : null;
+      const track = (data && data.track) || [];
+      trackCache[id] = track;
+      return track;
+    }catch(err){
+      console.error('track load failed', id, err);
+      return [];
+    }
   }
 
   // ---------- photo storage ----------
@@ -2342,7 +2443,8 @@
     return t || (e && e.photos && e.photos[i]) || null;
   }
 
-  function openLightbox(photos, startIndex){
+  // The apply half: puts the lightbox on screen. Routing decides when.
+  function applyLightboxOpen(photos, startIndex){
     if(!photos || !photos.length) return;
     const scroll = $('lightboxScroll');
     scroll.innerHTML = photos.map(p=>'<div class="lb-slide"><img src="'+p+'" alt=""></div>').join('');
@@ -2351,10 +2453,18 @@
       scroll.scrollLeft = (startIndex||0) * scroll.clientWidth;
     });
   }
-  function closeLightbox(){
+  function applyLightboxClose(){
     $('lightbox').classList.remove('open');
     $('lightboxScroll').innerHTML = '';
   }
+  // The navigate half: everything else calls these, and the hash change that
+  // results is what actually opens or closes anything.
+  function openLightbox(photos, startIndex){
+    if(!photos || !photos.length || !currentPaneId) return;
+    goToRoute('etappe-'+currentPaneId+'/foto-'+(startIndex||0));
+  }
+  function closeLightbox(){ routeUpFromPhoto(); }
+
   $('lightboxClose').addEventListener('click', closeLightbox);
   $('lightbox').addEventListener('click', (e)=>{
     if(e.target.id==='lightbox') closeLightbox();
@@ -2473,6 +2583,60 @@
     }
   }
 
+  // ---------- unread comments (owner only) ----------
+  // Same shape as the NIEUW badge above, over comment ids instead of entry ids:
+  // nothing otherwise tells the author that someone replied, since every
+  // comment is already in memory from loadSocial but nothing surfaces it.
+  function allCommentIds(){
+    const out = [];
+    Object.keys(commentsByEntry).forEach(id=>{
+      (commentsByEntry[id]||[]).forEach(c=>{ if(c && c.id) out.push(c.id); });
+    });
+    return out;
+  }
+  function loadSeenComments(){
+    const raw = lsGet(SEEN_COMMENTS_KEY);
+    if(raw === null){
+      // First run: treat the existing backlog as read rather than announcing
+      // every comment ever left.
+      seenCommentIds = allCommentIds();
+      saveSeenComments();
+      return;
+    }
+    try{
+      const parsed = JSON.parse(raw);
+      seenCommentIds = Array.isArray(parsed) ? parsed : [];
+    }catch(e){
+      seenCommentIds = [];
+    }
+  }
+  function saveSeenComments(){ lsSet(SEEN_COMMENTS_KEY, JSON.stringify(seenCommentIds)); }
+
+  function unseenCommentCount(){
+    return allCommentIds().filter(cid=> seenCommentIds.indexOf(cid) === -1).length;
+  }
+  // Own comments shouldn't count as news to the person who wrote them.
+  function markCommentsSeen(entryId){
+    let changed = false;
+    (commentsByEntry[entryId]||[]).forEach(c=>{
+      if(c && c.id && seenCommentIds.indexOf(c.id) === -1){
+        seenCommentIds.push(c.id);
+        changed = true;
+      }
+    });
+    if(changed){
+      saveSeenComments();
+      renderCommentBadge();
+    }
+  }
+  function renderCommentBadge(){
+    const row = $('commentBadgeRow');
+    if(!row) return;
+    const n = editUnlocked ? unseenCommentCount() : 0;
+    row.style.display = n ? 'block' : 'none';
+    if(n) row.textContent = n === 1 ? '1 nieuwe reactie' : n + ' nieuwe reacties';
+  }
+
   // ---------- stage list ----------
   function stageStat(label, value){
     return '<span>'+value+'<i>'+label+'</i></span>';
@@ -2554,6 +2718,82 @@
     renderStageList();
   }
 
+  // ---------- routing ----------
+  // The URL hash is the single source of truth for what is open; a hashchange
+  // listener does all the DOM work. Without this the phone back gesture left
+  // the site instead of closing an open stage, and no etappe could be linked.
+  //
+  //   ''                            -> overview
+  //   #etappe-<entryId>             -> that stage's pane
+  //   #etappe-<entryId>/foto-<n>    -> that pane plus the lightbox on photo n
+  //
+  // Entry id rather than stage number: numbers shift when a rest day is added
+  // in between, ids are stable and already URL-safe.
+  let pushedRoutes = 0; // how many history entries this session added itself
+
+  function currentRoute(){
+    const h = (location.hash || '').replace(/^#/, '');
+    const m = /^etappe-(.+?)(?:\/foto-(\d+))?$/.exec(h);
+    if(!m) return {pane:null, photo:null};
+    return {pane: m[1], photo: m[2] != null ? parseInt(m[2], 10) : null};
+  }
+
+  function goToRoute(hash){
+    if(('#' + hash) === location.hash) return;
+    pushedRoutes++;
+    location.hash = hash;
+  }
+
+  // Closing is not the same gesture as going back. The back gesture should step
+  // through history (stage 2 -> stage 1, if that is how you got there), but the
+  // X button means "I am done with this" and belongs on the overview. So X
+  // replaces the current entry rather than walking backwards through it.
+  function routeToOverview(){
+    history.replaceState(null, '', location.pathname + location.search);
+    pushedRoutes = 0;
+    applyRoute();
+  }
+
+  // One level up from a photo: back to its stage.
+  function routeUpFromPhoto(){
+    if(pushedRoutes > 0){
+      pushedRoutes--;
+      history.back();
+      return;
+    }
+    // Landed straight on a deep link to a photo, so there is nothing of ours to
+    // go back to -- step up in place rather than leaving the site.
+    if(currentPaneId){
+      history.replaceState(null, '', '#etappe-' + currentPaneId);
+      applyRoute();
+    } else {
+      routeToOverview();
+    }
+  }
+
+  function applyRoute(){
+    const r = currentRoute();
+    const paneId = (r.pane && entries[r.pane]) ? r.pane : null;
+
+    if(paneId){
+      // covers both a fresh open and switching straight to another stage
+      if(paneId !== currentPaneId) applyPaneOpen(paneId);
+    } else if(currentPaneId){
+      applyPaneClose();
+    }
+
+    const wantPhoto = paneId ? r.photo : null;
+    const lightboxOpen = $('lightbox').classList.contains('open');
+    if(wantPhoto != null && !lightboxOpen){
+      const e = entries[paneId];
+      applyLightboxOpen((e && e.photos) || [], wantPhoto);
+    } else if(wantPhoto == null && lightboxOpen){
+      applyLightboxClose();
+    }
+  }
+
+  window.addEventListener('hashchange', applyRoute);
+
   // ---------- full-screen entry pane ----------
   let currentPaneId = null;
 
@@ -2584,7 +2824,7 @@
 
     const rest = isRest(e);
     const stageNum = stageNumbers()[id];
-    const hasRoute = e.track && e.track.length>1;
+    const hasRoute = entryHasTrack(e);
     const showMap = hasRoute || !!e.restLoc;
 
     const routeLine = rest
@@ -2613,11 +2853,17 @@
     renderSocial(id);
 
     if(showMap){
-      setTimeout(()=>{
+      setTimeout(async ()=>{
         const opts = {photos: e.photos, photoThumbs: e.photoThumbs, photoLocs: e.photoLocs};
-        dayMapInstances[id] = hasRoute
-          ? drawMap('map-'+id, e.track, opts)
-          : drawPointMap('map-'+id, e.restLoc, opts);
+        if(!hasRoute){
+          dayMapInstances[id] = drawPointMap('map-'+id, e.restLoc, opts);
+          return;
+        }
+        const track = await ensureTrack(id);
+        // The pane may have been closed or switched while the route was in
+        // flight; drawing into a detached element would leak a map instance.
+        if(currentPaneId !== id || !$('map-'+id)) return;
+        dayMapInstances[id] = drawMap('map-'+id, track, opts);
       }, 0);
     }
     renderCategoryContent(id, activeCat[id]);
@@ -2653,6 +2899,8 @@
           manifest.entryIds = manifest.entryIds.filter(x=>x!==id);
           await saveManifest(manifest);
           await deleteEntryData(id);
+          await deleteTrackData(id);
+          delete trackCache[id];
           // Take the image files with it, or they linger in Storage unreferenced.
           for(const url of (doomed.photos||[]).concat(doomed.photoThumbs||[])){
             await deleteStoredPhoto(url);
@@ -2790,11 +3038,12 @@
     $('paneNext').disabled = idx===-1 || idx>=ids.length-1;
   }
 
-  function openEntryPane(id){
+  function applyPaneOpen(id){
     if(!entries[id]) return;
     currentPaneId = id;
     const wasNew = isNewEntry(id);
     markSeen(id);
+    markCommentsSeen(id); // reading a stage counts as reading its comments
     renderEntryPane(id);
     $('entryPane').classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -2802,12 +3051,18 @@
     if(wasNew) renderStageList();
   }
 
-  function closeEntryPane(){
+  function applyPaneClose(){
     $('entryPane').classList.remove('open');
     document.body.style.overflow = '';
     teardownPaneInstances();
     currentPaneId = null;
   }
+
+  function openEntryPane(id){
+    if(!entries[id]) return;
+    goToRoute('etappe-'+id);
+  }
+  function closeEntryPane(){ routeToOverview(); }
 
   $('paneClose').addEventListener('click', closeEntryPane);
   $('panePrev').addEventListener('click', ()=>{
@@ -2821,7 +3076,10 @@
     if(idx>=0 && idx<ids.length-1) openEntryPane(ids[idx+1]);
   });
   document.addEventListener('keydown', (e)=>{
-    if(e.key==='Escape' && $('entryPane').classList.contains('open')) closeEntryPane();
+    if(e.key !== 'Escape') return;
+    // Innermost thing first, matching what the back gesture does.
+    if($('lightbox').classList.contains('open')) closeLightbox();
+    else if($('entryPane').classList.contains('open')) closeEntryPane();
   });
 
   function textBlock(text, italic){
@@ -2880,14 +3138,10 @@
     statsHtml += '</div></div>';
 
 
-    const hasTrack = e.track && e.track.length>1;
-    const chartsHtml = hasTrack
-      ? '<div class="scrub" id="scrub-'+id+'">'+
-          '<div class="scrub-read" id="scrubRead-'+id+'"></div>'+
-          '<input type="range" id="scrubRange-'+id+'" min="0" max="'+(e.track.length-1)+'" value="0" step="1" aria-label="Sleep over de route">'+
-        '</div>'+
-        '<div class="charts" id="charts-'+id+'"></div>'
-      : '';
+    // The scrubber's range depends on how many points there are, so the whole
+    // block is built after the route arrives rather than guessed at now.
+    const hasTrack = entryHasTrack(e);
+    const chartsHtml = hasTrack ? '<div class="charts-slot" id="chartsSlot-'+id+'"></div>' : '';
 
     const countersHtml = '<div class="counters">'+
       counterBlock('flame', 'bitterballen verbrand', s.bitterballen!=null ? s.bitterballen : '—')+
@@ -2898,8 +3152,24 @@
     el.innerHTML = (rest ? '' : statsHtml) + countersHtml + chartsHtml;
 
     if(hasTrack){
-      dayChartInstances[id] = renderCharts(id, e.track) || [];
-      setupScrubber(id, e.track);
+      const slot = $('chartsSlot-'+id);
+      slot.innerHTML = '<div class="loading-msg">Route laden…</div>';
+      ensureTrack(id).then(track=>{
+        // Guard against the pane having moved on while this was in flight.
+        if(currentPaneId !== id || activeCat[id] !== '3' || !$('chartsSlot-'+id)) return;
+        if(!track || track.length < 2){
+          slot.innerHTML = '<div class="loading-msg">Route niet gevonden.</div>';
+          return;
+        }
+        slot.innerHTML =
+          '<div class="scrub" id="scrub-'+id+'">'+
+            '<div class="scrub-read" id="scrubRead-'+id+'"></div>'+
+            '<input type="range" id="scrubRange-'+id+'" min="0" max="'+(track.length-1)+'" value="0" step="1" aria-label="Sleep over de route">'+
+          '</div>'+
+          '<div class="charts" id="charts-'+id+'"></div>';
+        dayChartInstances[id] = renderCharts(id, track) || [];
+        setupScrubber(id, track);
+      });
     }
   }
 
@@ -3195,7 +3465,9 @@
 
     // A stage needs a route to draw; a rest day needs only the coordinates it
     // was given. One without either has nothing to place, so it stays off.
-    function hasRoute(e){ return !!(e.track && e.track.length>1); }
+    // The route here is the coarse preview, never the full track: this map is
+    // zoomed out far enough that 40 points and 300 look identical.
+    function hasRoute(e){ return entryHasTrack(e); }
     function restPin(e){ return (!hasRoute(e) && isRest(e) && e.restLoc && e.restLoc.lat!=null) ? e.restLoc : null; }
 
     const ids = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
@@ -3228,7 +3500,7 @@
         anchor = [rest.lat, rest.lon];
         allBounds.push(anchor);
       } else {
-        const track = e.track;
+        const track = entryRouteLine(e);
         const start = track.find(p=>p.lat!=null && p.lon!=null);
         if(!start) return;
         anchor = [start.lat, start.lon];
@@ -3395,9 +3667,12 @@
       const e = entries[id];
       const s = e && e.stats;
       if(!s || s.maxSpeedKmh==null || s.maxSpeedKmh <= MAX_PLAUSIBLE_KMH) continue;
-      if(!e.track || !e.track.length) continue;
+      // Only fetched for an entry that actually looks wrong, so the normal case
+      // costs no reads even though the points no longer sit on the entry.
+      const track = await ensureTrack(id);
+      if(!track || !track.length) continue;
       let max = null;
-      e.track.forEach(p=>{
+      track.forEach(p=>{
         if(p.speedKmh!=null && p.speedKmh <= MAX_PLAUSIBLE_KMH && (max===null || p.speedKmh>max)) max = p.speedKmh;
       });
       if(max===null) continue;
@@ -3471,6 +3746,55 @@
     if(done) renderTimeline();
   }
 
+  // One-off move of the route points that predate the tracks collection. They
+  // sat inline on the entry, and once photos went to Storage they were 95% of
+  // everything downloaded on the overview -- where only the coarse preview is
+  // ever drawn.
+  //
+  // The track document is written first, so a failure part-way leaves the entry
+  // still holding its own points and a harmless duplicate behind; a retry
+  // finishes the job. Entries that already have a routePreview are skipped.
+  let migratedTracks = false;
+  async function migrateTracksToCollection(){
+    if(migratedTracks || !manifest || !editUnlocked) return;
+    if(!Object.keys(entries).length) return;
+
+    const pending = Object.keys(entries).filter(id=>{
+      const e = entries[id];
+      return e && e.track && e.track.length > 1 &&
+             !(e.routePreview && e.routePreview.length > 1);
+    });
+    if(!pending.length) return;
+    migratedTracks = true;
+
+    showErrorBanner('Routes verplaatsen naar een eigen collectie — even geduld.');
+    let done = 0;
+    for(const id of pending){
+      const e = entries[id];
+      try{
+        await saveTrackData(id, e.track);
+        const updated = Object.assign({}, e, {
+          routePreview: routePreviewFrom(e.track),
+          track: []
+        });
+        await saveEntryData(id, updated);
+        trackCache[id] = e.track;
+        entries[id] = updated;
+        done++;
+        console.info('route verplaatst naar tracks/ voor '+id);
+      }catch(err){
+        console.error('track migration failed for '+id, err);
+        showErrorBanner('Kon de route van '+id+' niet verplaatsen: ' +
+          ((err && err.message) || err) +
+          ' — staan de Firestore-regels voor tracks/ al gepubliceerd?');
+        return;
+      }
+    }
+    const banner = $('errBanner');
+    if(banner) banner.remove();
+    if(done) renderTimeline();
+  }
+
   function onSignedIn(){
     editUnlocked = true;
     $('signOutRow').style.display='block';
@@ -3478,14 +3802,17 @@
     updateFabIcon();
     renderIntroCard();
     renderDailyCard();
+    renderCommentBadge();
     if(manifest) renderTimeline();
     backfillMaxSpeeds();
     migratePhotosToStorage();
+    migrateTracksToCollection();
   }
   function onSignedOut(){
     editUnlocked = false;
     $('signOutRow').style.display='none';
     $('backupRow').style.display='none';
+    renderCommentBadge(); // hides it: the count is only for the author
     updateFabIcon();
     renderIntroCard();
     renderDailyCard();
@@ -3529,12 +3856,25 @@
     const was = btn.textContent;
     btn.textContent = 'Back-up maken...';
     try{
+      // Route points live in their own collection now, so a backup of the
+      // entries alone would quietly contain no routes at all. One read for the
+      // lot, then each entry carries its own points in the file.
+      const trackSnap = await db.collection('tracks').get();
+      const tracks = {};
+      trackSnap.forEach(doc=>{ tracks[doc.id] = (doc.data() || {}).track || []; });
+
       const payload = {
         exportedAt: new Date().toISOString(),
-        format: 'oeverloos-gelul-backup-1',
+        format: 'oeverloos-gelul-backup-2',
         manifest: manifest,
         // Ordered the way the trip reads, not the way Firestore returns them.
-        entries: orderedIds().map(id=> entries[id]),
+        entries: orderedIds().map(id=>{
+          const e = entries[id];
+          const stored = tracks[id];
+          // Legacy entries still hold their points inline; migrated ones don't.
+          const points = (e.track && e.track.length>1) ? e.track : (stored || []);
+          return Object.assign({}, e, {track: points});
+        }),
         likes: likesByEntry,
         comments: commentsByEntry
       };
@@ -3562,6 +3902,106 @@
     // back to being an ordinary visitor who can still like and comment.
     anonAttempted = false;
     auth.signOut();
+  });
+
+  // ---------- entry-form drafts ----------
+  // A save is: compress photos -> upload -> two Firestore writes. On a bad
+  // connection any of that can fail, and a closed tab or a dead phone loses
+  // everything typed. The text is kept in localStorage as it is written.
+  //
+  // Photos and the route file are deliberately not part of a draft: File
+  // objects can't be serialised, and silently restoring an entry minus its
+  // photos would be worse than not restoring it at all.
+  const DRAFT_FIELDS = [
+    'fDate','fStageTitle','fStart','fFinish','fRestLoc',
+    'fPowerOverride','fDistOverride','fBitterballen',
+    'fCat1Title','fCat1Text',
+    'fCat2Meegemaakt','fCat2Hoogtepunt','fCat2Dieptepunt',
+    'fCat3Mooie','fCat3Lekkere'
+  ];
+
+  function collectDraft(){
+    const fields = {};
+    DRAFT_FIELDS.forEach(id=>{ const el = $(id); if(el) fields[id] = el.value; });
+    fields.fRest = !!($('fRest') && $('fRest').checked);
+    return fields;
+  }
+
+  function draftIsEmpty(fields){
+    return DRAFT_FIELDS.every(id=> !(fields[id]||'').trim()) && !fields.fRest;
+  }
+
+  function saveDraft(){
+    const fields = collectDraft();
+    // Don't leave an empty shell behind that would offer a pointless restore.
+    if(draftIsEmpty(fields)){ clearDraft(); return; }
+    lsSet(DRAFT_KEY, JSON.stringify({
+      entryId: editingEntryId || null,
+      savedAt: Date.now(),
+      fields: fields
+    }));
+  }
+  function clearDraft(){
+    // Kill any queued write first, or a debounce still in flight would put the
+    // draft straight back after a successful save.
+    if(draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
+    try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+  }
+  function readDraft(){
+    const raw = lsGet(DRAFT_KEY);
+    if(!raw) return null;
+    try{
+      const d = JSON.parse(raw);
+      return (d && d.fields) ? d : null;
+    }catch(e){ return null; }
+  }
+
+  var draftTimer = null;
+  function flushDraft(){
+    if(draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
+    saveDraft();
+  }
+  function scheduleDraftSave(){
+    if(draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 500);
+  }
+  $('entryOverlay').addEventListener('input', scheduleDraftSave);
+  $('entryOverlay').addEventListener('change', scheduleDraftSave);
+
+  function applyDraft(fields){
+    DRAFT_FIELDS.forEach(id=>{
+      const el = $(id);
+      if(el && fields[id] != null) el.value = fields[id];
+    });
+    if($('fRest')) $('fRest').checked = !!fields.fRest;
+    applyRestMode(); // the checkbox drives which fields are even visible
+  }
+
+  // Offered, never applied automatically: silently overwriting the stored
+  // values of an entry being edited would be its own kind of data loss.
+  function maybeOfferDraft(){
+    const bar = $('draftBar');
+    if(!bar) return;
+    bar.hidden = true;
+    const d = readDraft();
+    if(!d) return;
+    // A draft belongs to the context it was written in -- a half-typed new
+    // entry must not be offered while editing an existing one.
+    if((d.entryId || null) !== (editingEntryId || null)) return;
+    $('draftBarText').textContent =
+      'Niet-opgeslagen concept van ' + relTime(d.savedAt) +
+      '. Foto\'s en het routebestand zitten er niet in.';
+    bar.hidden = false;
+  }
+
+  $('draftRestore').addEventListener('click', ()=>{
+    const d = readDraft();
+    if(d) applyDraft(d.fields);
+    $('draftBar').hidden = true;
+  });
+  $('draftDiscard').addEventListener('click', ()=>{
+    clearDraft();
+    $('draftBar').hidden = true;
   });
 
   // ---------- entry form ----------
@@ -3630,7 +4070,14 @@
     highlightIdx = 0;
     pendingTrack = null;
 
-    existingTrackData = (entry && entry.track && entry.track.length>1) ? {stats: entry.stats||{}, track: entry.track} : null;
+    // inlineTrack is only set for an entry that predates the tracks collection;
+    // a migrated one keeps its points there and needs nothing rewritten unless
+    // a new file is uploaded.
+    existingTrackData = (entry && entryHasTrack(entry)) ? {
+      stats: entry.stats || {},
+      routePreview: (entry.routePreview && entry.routePreview.length>1) ? entry.routePreview : null,
+      inlineTrack: (entry.track && entry.track.length>1) ? entry.track : null
+    } : null;
 
     removedPhotoUrls = [];
     formPhotos = ((entry && entry.photos) || []).map((url, i)=>({
@@ -3654,8 +4101,11 @@
       $('trackPreview').style.display='none';
     }
 
+    maybeOfferDraft();
     $('entryOverlay').classList.add('open');
   }
+  // Cancelling deliberately keeps the draft -- that is exactly when it is
+  // wanted back. It is cleared only by a successful save or by Weggooien.
   function closeEntryOverlay(){ $('entryOverlay').classList.remove('open'); }
 
   updateFabIcon();
@@ -3663,9 +4113,14 @@
     if(editUnlocked){ openEntryOverlay(); return; }
     openPassOverlay();
   });
-  $('entryCancel').addEventListener('click', closeEntryOverlay);
+  // Flush before closing: a debounce still pending would lose the last few
+  // keystrokes, which is precisely what the draft exists to prevent.
+  $('entryCancel').addEventListener('click', ()=>{ flushDraft(); closeEntryOverlay(); });
 
-  const MAX_PHOTOS = 4;
+  // Was 4 only because four base64 photos filled a 1MB Firestore document.
+  // Photos live in Storage now, so the ceiling is just what a stage can
+  // reasonably show.
+  const MAX_PHOTOS = 10;
 
   function renderPhotoPicker(){
     const preview = $('photoPreview');
@@ -3799,23 +4254,33 @@
     $('entrySave').textContent = 'Bezig met opslaan...';
 
     try{
-      let stats, track;
+      // The points themselves go to tracks/<id>; the entry keeps only the
+      // coarse preview the overview map draws. trackToWrite stays null when
+      // nothing about the route changed, so an edit doesn't rewrite it.
+      let stats, routePreview = [], trackToWrite = null, dropTrack = false;
       if(isRestDay){
         // No ride, so no route and no ride-derived statistics -- even if this
         // entry used to be an etappe and still has a stored track.
         stats = {};
-        track = [];
+        dropTrack = true;
         const bb = parseFloat($('fBitterballen').value);
         if(!isNaN(bb)) stats.bitterballen = bb;
       } else if(pendingTrack){
         stats = Object.assign({}, pendingTrack.stats);
-        track = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
+        trackToWrite = downsample(pendingTrack.points, 300).map(p=>({lat:p.lat, lon:p.lon, ele:p.ele, d:p.d, speedKmh:p.speedKmh, power:p.power, hr:p.hr}));
+        routePreview = routePreviewFrom(trackToWrite);
       } else if(existingTrackData){
         stats = Object.assign({}, existingTrackData.stats);
-        track = existingTrackData.track;
+        if(existingTrackData.routePreview){
+          routePreview = existingTrackData.routePreview;      // already split out
+        } else {
+          // Legacy entry still carrying its points inline: saving it moves them.
+          trackToWrite = existingTrackData.inlineTrack;
+          routePreview = routePreviewFrom(trackToWrite);
+        }
       } else {
         stats = {};
-        track = [];
+        dropTrack = true;
       }
       if(!isRestDay){
         const distOverride = parseFloat($('fDistOverride').value);
@@ -3859,7 +4324,10 @@
         start: $('fStart').value.trim(),
         finish: isRestDay ? '' : $('fFinish').value.trim(),
         restLoc: restLoc || null,
-        stats, track, photos, photoThumbs, photoLocs,
+        stats,
+        track: [],          // points live in tracks/<id> now
+        routePreview,
+        photos, photoThumbs, photoLocs,
         cat1: {
           title: $('fCat1Title').value.trim(),
           text: $('fCat1Text').value
@@ -3875,6 +4343,15 @@
         }
       };
 
+      // Points first: if this failed after the entry was written, the entry
+      // would point at a route that isn't there.
+      if(trackToWrite && trackToWrite.length > 1){
+        await saveTrackData(id, trackToWrite);
+        trackCache[id] = trackToWrite;
+      } else if(dropTrack){
+        delete trackCache[id];
+      }
+
       await saveEntryData(id, entry);
       if(!manifest.entryIds.includes(id)) manifest.entryIds.push(id);
       await saveManifest(manifest);
@@ -3886,6 +4363,11 @@
       for(const url of removedPhotoUrls){ await deleteStoredPhoto(url); }
       removedPhotoUrls = [];
 
+      // A stage edited into a rest day has no route to keep. Only worth a round
+      // trip when editing: a brand new entry never had one.
+      if(dropTrack && editingEntryId) await deleteTrackData(id);
+
+      clearDraft(); // the text is safely stored now
       closeEntryOverlay();
       renderTimeline();
       if(currentPaneId === id){ renderEntryPane(id); }
@@ -4022,11 +4504,15 @@
     // document left behind by a failed delete never reappears.
     manifest.entryIds.forEach(id=>{ if(all[id]) entries[id] = all[id]; });
 
-    loadSeenIds(); // needs entries loaded, to seed a first-time visitor
+    loadSeenIds();      // needs entries loaded, to seed a first-time visitor
+    loadSeenComments(); // needs loadSocial done, same reason
 
     renderTimeline();
-    backfillMaxSpeeds();          // no-ops unless signed in and repair is due
+    // Only now can a shared #etappe-<id> link resolve to a real entry.
+    applyRoute();
+    backfillMaxSpeeds();          // no-op unless signed in and repair is due
     migratePhotosToStorage();
+    migrateTracksToCollection();
   }
 
   window.addEventListener('error', (e)=>{

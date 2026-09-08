@@ -30,6 +30,15 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // Route points, kept out of the entry document: a 300-point track is ~30KB
+    // and would otherwise be downloaded for every stage on the overview, where
+    // only the coarse routePreview on the entry is actually drawn. Fetched on
+    // demand when a stage is opened.
+    match /tracks/{trackId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
     // ---------- likes ----------
     // Document id is deliberately "<entryId>__<uid>" so one visitor can only
     // ever hold a single like per stage -- the uniqueness is enforced by the
