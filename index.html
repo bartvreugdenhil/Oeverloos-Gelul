@@ -19,7 +19,7 @@
 <meta property="og:image" content="https://oeverloosgelul.nl/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Bart aan een tafeltje met een aperol spritz na een etappe.">
+<meta property="og:image:alt" content="Het Nationaal Monument in Jakarta.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Oeverloos Gelul">
 <meta name="twitter:description" content="Vrij associëren op twee wielen — een fietsdagboek van Indonesië naar Vietnam.">
@@ -4516,6 +4516,12 @@
   }
 
   window.addEventListener('error', (e)=>{
+    // Cross-origin scripts (Leaflet, Firebase, Chart.js, exif-js -- all
+    // loaded without crossorigin) report their real errors as the opaque
+    // "Script error." with no message or line info. It's diagnostically
+    // useless and Safari's share-sheet preview render seems to trigger it
+    // harmlessly, so don't scare visitors with a banner for it.
+    if(!e.message || e.message === 'Script error.') return;
     showErrorBanner('Fout: ' + e.message);
   });
   window.addEventListener('unhandledrejection', (e)=>{
