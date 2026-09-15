@@ -536,26 +536,22 @@
     transform-origin:50% 100%;
     display:flex;
     flex-direction:column;
-    width:28px;
+    align-items:center;
     cursor:pointer;
     filter:drop-shadow(0 3px 7px rgba(0,0,0,0.35));
   }
-  .stage-pin.no-photo{
-    width:auto;
-    max-width:70px;
-  }
   .stage-pin .thumb{
-    width:100%;
+    width:28px;
     height:28px;
     object-fit:cover;
     display:block;
-    border-radius:5px 5px 0 0;
-    border:1px solid #fff;
-    border-bottom:none;
+    border-radius:50%;
+    border:2px solid #fff;
     background:var(--olive-deep);
   }
   .stage-pin .label{
     position:relative;
+    margin-top:3px;
     background:var(--ground-dark);
     color:#fff;
     font-family:var(--font-body);
@@ -564,18 +560,13 @@
     letter-spacing:0.01em;
     line-height:1.2;
     text-align:center;
-    padding:2px 3px 3px;
-    border-radius:0 0 5px 5px;
-    border:1px solid #fff;
-    border-top:none;
-    white-space:normal;
-    word-break:break-word;
-  }
-  .stage-pin.no-photo .label{
+    padding:3px 6px;
     border-radius:var(--r-full);
     border:1px solid #fff;
     white-space:nowrap;
-    padding:3px 6px;
+    max-width:90px;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
   .stage-pin .label::after{
     content:'';
@@ -3570,7 +3561,14 @@
 
     if(allBounds.length){
       map.fitBounds(allBounds, {padding:[24,24]});
-      baseZoom = map.getZoom();
+      // fitBounds already pads by 24px, but the route still starts flush
+      // against the edge on first load -- back off one whole zoom level for
+      // real breathing room instead of nudging the padding. setZoom's own
+      // getZoom() lags behind while it settles its own zoom animation (the
+      // same issue the pin-scaling fix above ran into with fitBounds), so
+      // the target is computed arithmetically instead of read back.
+      baseZoom = map.getZoom() - 1;
+      map.setZoom(baseZoom);
       pinEls = markers
         .map(m => m.getElement() && m.getElement().querySelector('.stage-pin'))
         .filter(Boolean);
