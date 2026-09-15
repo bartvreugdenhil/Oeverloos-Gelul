@@ -2150,41 +2150,53 @@
     return h>0 ? h+'u '+m+'m' : m+'m';
   }
 
-  // Normalized Power (Coggan): resample power onto a ~1s grid (forward-fill
-  // by timestamp if available, else assume 1 sample/sec), 30-sample rolling
-  // average, average of those to the 4th power, then 4th root.
+  // Normalized Power (Coggan): resample power onto a ~1s grid per
+  // contiguous recording segment (forward-fill by timestamp if available,
+  // else assume 1 sample/sec), 30-sample rolling average within each
+  // segment, then average of all those windows to the 4th power, then 4th
+  // root. A gap in the timestamps longer than 30s (head unit left running
+  // through a long stop) ends a segment instead of being bridged with
+  // stale power -- otherwise an hours-long stop gets filled with whatever
+  // power was recorded right before it and drags the whole ride's NP down
+  // well below Strava/Garmin/intervals.icu, which all exclude such gaps.
+  const NP_GAP_SEC = 30;
   function normalizedPower(points){
     const withPower = points.filter(p=>p.power!=null);
     if(withPower.length < 30) return null;
 
-    let series;
+    const segments = [];
     const hasTimes = points.every(p=>p.time!=null);
     if(hasTimes){
-      const t0 = points[0].time, t1 = points[points.length-1].time;
-      const totalSec = Math.round((t1-t0)/1000);
-      if(totalSec < 30) return null;
-      series = new Array(totalSec+1).fill(null);
-      let pi = 0;
-      let lastPower = points[0].power!=null ? points[0].power : 0;
-      for(let s=0;s<=totalSec;s++){
-        const targetT = t0 + s*1000;
-        while(pi < points.length-1 && points[pi+1].time<=targetT){
-          pi++;
-          if(points[pi].power!=null) lastPower = points[pi].power;
+      let series = null, lastPower = 0;
+      for(let i=0;i<points.length;i++){
+        const p = points[i];
+        if(i>0){
+          const dtSec = (p.time-points[i-1].time)/1000;
+          if(dtSec > NP_GAP_SEC){
+            if(series) segments.push(series);
+            series = null;
+          } else {
+            const steps = Math.round(dtSec);
+            for(let s=1;s<steps;s++) series.push(lastPower);
+          }
         }
-        series[s] = lastPower;
+        if(p.power!=null) lastPower = p.power;
+        if(!series) series = [];
+        series.push(lastPower);
       }
+      if(series) segments.push(series);
     } else {
-      series = points.map(p=> p.power!=null ? p.power : 0);
-      if(series.length < 30) return null;
+      segments.push(points.map(p=> p.power!=null ? p.power : 0));
     }
 
     const rolling = [];
-    let windowSum = 0;
-    for(let i=0;i<series.length;i++){
-      windowSum += series[i];
-      if(i>=30) windowSum -= series[i-30];
-      if(i>=29) rolling.push(windowSum/30);
+    for(const series of segments){
+      let windowSum = 0;
+      for(let i=0;i<series.length;i++){
+        windowSum += series[i];
+        if(i>=30) windowSum -= series[i-30];
+        if(i>=29) rolling.push(windowSum/30);
+      }
     }
     if(!rolling.length) return null;
     const sum4 = rolling.reduce((s,v)=> s + Math.pow(v,4), 0);
