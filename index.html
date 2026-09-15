@@ -546,7 +546,7 @@
   }
   .stage-pin .thumb{
     width:100%;
-    height:20px;
+    height:28px;
     object-fit:cover;
     display:block;
     border-radius:5px 5px 0 0;
@@ -3499,7 +3499,7 @@
 
     const stagePoints = [];
     const allBounds = [];
-    const pinEls = [];
+    const markers = [];
 
     ids.forEach(id=>{
       const e = entries[id];
@@ -3540,8 +3540,7 @@
       });
       const marker = L.marker(anchor, {icon}).addTo(map);
       marker.on('click', ()=> goToEntry(id));
-      const pinEl = marker.getElement() && marker.getElement().querySelector('.stage-pin');
-      if(pinEl) pinEls.push(pinEl);
+      markers.push(marker);
     });
 
     // Route lines keep a fixed screen-pixel weight at every zoom, so at the
@@ -3550,7 +3549,15 @@
     // reads better than a pin stuck at the same small size throughout.
     // baseZoom is the fit-to-bounds level (the whole-trip view), so pins
     // start at their smallest and grow from there as you zoom in.
+    //
+    // The pins' DOM elements don't exist yet at this point -- the map has no
+    // view until fitBounds below gives it one, and Leaflet doesn't render a
+    // marker's icon until it can project it onto a view. Resolving
+    // getElement() here (before fitBounds) always came back empty, so the
+    // scale was silently never applied. Collecting pinEls only after
+    // fitBounds is what actually makes them exist.
     let baseZoom = null;
+    let pinEls = [];
     function applyPinScale(){
       if(baseZoom==null) return;
       const z = map.getZoom();
@@ -3564,6 +3571,9 @@
     if(allBounds.length){
       map.fitBounds(allBounds, {padding:[24,24]});
       baseZoom = map.getZoom();
+      pinEls = markers
+        .map(m => m.getElement() && m.getElement().querySelector('.stage-pin'))
+        .filter(Boolean);
       applyPinScale();
     }
   }
