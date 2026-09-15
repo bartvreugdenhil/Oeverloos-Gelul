@@ -536,21 +536,21 @@
     transform-origin:50% 100%;
     display:flex;
     flex-direction:column;
-    width:66px;
+    width:44px;
     cursor:pointer;
     filter:drop-shadow(0 3px 7px rgba(0,0,0,0.35));
   }
   .stage-pin.no-photo{
     width:auto;
-    max-width:140px;
+    max-width:100px;
   }
   .stage-pin .thumb{
     width:100%;
-    height:52px;
+    height:34px;
     object-fit:cover;
     display:block;
-    border-radius:9px 9px 0 0;
-    border:2px solid #fff;
+    border-radius:7px 7px 0 0;
+    border:1.5px solid #fff;
     border-bottom:none;
     background:var(--olive-deep);
   }
@@ -560,31 +560,31 @@
     color:#fff;
     font-family:var(--font-body);
     font-weight:700;
-    font-size:10px;
+    font-size:8px;
     letter-spacing:0.01em;
     line-height:1.2;
     text-align:center;
-    padding:4px 6px 5px;
-    border-radius:0 0 9px 9px;
-    border:2px solid #fff;
+    padding:3px 4px 4px;
+    border-radius:0 0 7px 7px;
+    border:1.5px solid #fff;
     border-top:none;
     white-space:normal;
     word-break:break-word;
   }
   .stage-pin.no-photo .label{
     border-radius:var(--r-full);
-    border:2px solid #fff;
+    border:1.5px solid #fff;
     white-space:nowrap;
-    padding:5px 10px;
+    padding:4px 8px;
   }
   .stage-pin .label::after{
     content:'';
     position:absolute;
-    left:50%;bottom:-6px;
+    left:50%;bottom:-5px;
     transform:translateX(-50%);
-    border-left:5px solid transparent;
-    border-right:5px solid transparent;
-    border-top:6px solid var(--ground-dark);
+    border-left:4px solid transparent;
+    border-right:4px solid transparent;
+    border-top:5px solid var(--ground-dark);
   }
   /* a rest day's pin, olive to read as "stood still here" against the stages */
   .stage-pin.is-rest .label{background:var(--olive-deep);}
@@ -3499,7 +3499,6 @@
 
     const stagePoints = [];
     const allBounds = [];
-    const pinEls = [];
 
     ids.forEach(id=>{
       const e = entries[id];
@@ -3540,25 +3539,15 @@
       });
       const marker = L.marker(anchor, {icon}).addTo(map);
       marker.on('click', ()=> goToEntry(id));
-      const pinEl = marker.getElement() && marker.getElement().querySelector('.stage-pin');
-      if(pinEl) pinEls.push(pinEl);
     });
 
-    let baseZoom = null;
-    function applyPinScale(){
-      if(baseZoom==null) return;
-      const z = map.getZoom();
-      const scale = Math.max(0.6, Math.min(3.2, 1 + (z - baseZoom) * 0.3));
-      pinEls.forEach(el=>{
-        el.style.transform = 'translate(-50%,-100%) scale(' + scale + ')';
-      });
-    }
-    map.on('zoom', applyPinScale);
-
+    // Deliberately no zoom-linked resize here: route lines keep a fixed
+    // screen-pixel weight at every zoom (that's just how Leaflet draws
+    // them), so a pin that grew/shrank with zoom would constantly throw off
+    // its size relative to the line. A plain divIcon already stays
+    // constant-size across zoom, which is what keeps the two in proportion.
     if(allBounds.length){
       map.fitBounds(allBounds, {padding:[24,24]});
-      baseZoom = map.getZoom();
-      applyPinScale();
     }
   }
 
