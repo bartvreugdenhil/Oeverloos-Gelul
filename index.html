@@ -580,6 +580,18 @@
   /* a rest day's pin, olive to read as "stood still here" against the stages */
   .stage-pin.is-rest .label{background:var(--olive-deep);}
   .stage-pin.is-rest .label::after{border-top-color:var(--olive-deep);}
+  /* the "Huidige locatie" flag at the end of the newest stage -- same warm
+     orange as that stage's highlighted route line, so the two visually tie
+     together as "this is the line, this is where it currently ends". */
+  .stage-pin.current-pin .thumb{
+    background:#C2410C;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .stage-pin.current-pin .thumb svg{width:15px;height:15px;}
+  .stage-pin.current-pin .label{background:#C2410C;}
+  .stage-pin.current-pin .label::after{border-top-color:#C2410C;}
   /* photo thumbnails pinned along a stage route */
   .photo-pin{
     position:absolute;
@@ -3481,6 +3493,12 @@
     // "Newest" means the newest ride: a rest day draws no line to highlight.
     const rideIds = ids.filter(id => hasRoute(entries[id]));
     const latestRideId = rideIds[rideIds.length-1];
+    // The "Huidige locatie" flag marks where the trip currently stands, so it
+    // only makes sense when the most recent entry overall is a ride: if it's
+    // a rest day, the flag stays off rather than pointing at an older stage.
+    const latestOverallId = ids[ids.length-1];
+    const showCurrentLocation = latestRideId!=null && latestRideId === latestOverallId;
+    const CURRENT_LOCATION_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h14l-3 4.5 3 4.5H4"/></svg>';
 
     const map = L.map(el, {zoomControl:true, attributionControl:true});
     overviewMapInstance = map;
@@ -3516,6 +3534,18 @@
         const routeLatLngs = track.filter(p=>p.lat!=null&&p.lon!=null).map(p=>[p.lat,p.lon]);
         L.polyline(routeLatLngs, {color:'#fff', weight:isLatest?6:5, opacity:0.85}).addTo(map);
         L.polyline(routeLatLngs, {color:routeColor, weight:isLatest?4:3, opacity:0.95}).addTo(map);
+
+        if(isLatest && showCurrentLocation){
+          const flagIcon = L.divIcon({
+            className:'stage-pin-wrap',
+            html:'<div class="stage-pin current-pin"><div class="thumb">'+CURRENT_LOCATION_FLAG_SVG+'</div><div class="label">Huidige locatie</div></div>',
+            iconSize:[0,0],
+            iconAnchor:[0,0]
+          });
+          const flagMarker = L.marker(routeLatLngs[routeLatLngs.length-1], {icon: flagIcon}).addTo(map);
+          flagMarker.on('click', ()=> goToEntry(id));
+          markers.push(flagMarker);
+        }
       }
       stagePoints.push(anchor);
 
