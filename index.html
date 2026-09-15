@@ -3499,6 +3499,7 @@
 
     const stagePoints = [];
     const allBounds = [];
+    const pinEls = [];
 
     ids.forEach(id=>{
       const e = entries[id];
@@ -3539,15 +3540,31 @@
       });
       const marker = L.marker(anchor, {icon}).addTo(map);
       marker.on('click', ()=> goToEntry(id));
+      const pinEl = marker.getElement() && marker.getElement().querySelector('.stage-pin');
+      if(pinEl) pinEls.push(pinEl);
     });
 
-    // Deliberately no zoom-linked resize here: route lines keep a fixed
-    // screen-pixel weight at every zoom (that's just how Leaflet draws
-    // them), so a pin that grew/shrank with zoom would constantly throw off
-    // its size relative to the line. A plain divIcon already stays
-    // constant-size across zoom, which is what keeps the two in proportion.
+    // Route lines keep a fixed screen-pixel weight at every zoom, so at the
+    // full-trip view a bigger thumbnail would start to bury the line -- but
+    // once you zoom into a single stage there's room to let it grow, which
+    // reads better than a pin stuck at the same small size throughout.
+    // baseZoom is the fit-to-bounds level (the whole-trip view), so pins
+    // start at their smallest and grow from there as you zoom in.
+    let baseZoom = null;
+    function applyPinScale(){
+      if(baseZoom==null) return;
+      const z = map.getZoom();
+      const scale = Math.max(0.6, Math.min(3.2, 1 + (z - baseZoom) * 0.3));
+      pinEls.forEach(el=>{
+        el.style.transform = 'translate(-50%,-100%) scale(' + scale + ')';
+      });
+    }
+    map.on('zoom', applyPinScale);
+
     if(allBounds.length){
       map.fitBounds(allBounds, {padding:[24,24]});
+      baseZoom = map.getZoom();
+      applyPinScale();
     }
   }
 
