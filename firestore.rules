@@ -84,9 +84,21 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && (resource.data.uid == request.auth.uid || isOwner());
 
-      // No edits -- an edited comment can't be distinguished from a hijacked
-      // one, and nothing in the UI needs it.
-      allow update: if false;
+      // A commenter can edit their own text (never someone else's, and never
+      // the owner on their behalf -- rewriting words attributed to another
+      // name is a different thing from deleting them). Scoped to only the
+      // text/editedAt fields so entryId/uid/name/ts -- who posted what,
+      // where, and when -- can't be rewritten after the fact. The UI always
+      // shows "(bewerkt)" on an edited comment, which is what actually
+      // answers the original worry about not being able to tell an edit
+      // from a hijack: the edit is visible, not silent.
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.editedAt is number;
     }
 
     // Anything not matched above stays closed.
