@@ -991,6 +991,8 @@
   }
   .comment-name{font-size:var(--t-small);font-weight:700;color:var(--ink);}
   .comment-time{font-size:var(--t-caps);color:var(--ink-soft);}
+  .comment-edited{font-style:italic;}
+  .comment-edit,
   .comment-del{
     margin-left:auto;
     background:none;border:none;
@@ -1000,6 +1002,7 @@
     padding:0 var(--s1);
     line-height:1;
   }
+  .comment-edit:hover{color:var(--accent);}
   .comment-del:hover{color:var(--danger);}
   .comment-text{
     font-family:var(--font-display);
@@ -1013,6 +1016,25 @@
     font-size:var(--t-small);
     color:var(--ink-soft);
     font-style:italic;
+  }
+  .comment-edit-text{
+    width:100%;
+    font-family:var(--font-display);
+    font-size:var(--t-h3);
+    line-height:1.5;
+    padding:var(--s3);
+    border:1px solid var(--sep);
+    border-radius:var(--r-md);
+    background:var(--surface);
+    color:var(--ink);
+    min-height:84px;
+    resize:vertical;
+  }
+  .comment-edit-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:var(--s2);
+    margin-top:var(--s2);
   }
   .comment-form{margin-top:var(--s4);display:flex;flex-direction:column;gap:var(--s2);}
   .comment-form input,
@@ -1727,6 +1749,7 @@
   let visitorUid = null;      // anonymous auth uid, used for likes/comments
   let likesByEntry = {};      // entryId -> [uid, ...]
   let commentsByEntry = {};   // entryId -> [{id, uid, name, text, ts}, ...]
+  let editingCommentId = null; // id of the comment currently showing its edit form, if any
   let seenIds = [];           // entry ids this visitor has already seen
   let seenCommentIds = [];    // comment ids already surfaced to the owner
 
@@ -1924,6 +1947,14 @@
   async function deleteComment(entryId, commentId){
     await db.collection('comments').doc(commentId).delete();
     commentsByEntry[entryId] = (commentsByEntry[entryId]||[]).filter(c=>c.id!==commentId);
+  }
+
+  async function updateComment(entryId, commentId, text){
+    const editedAt = Date.now();
+    const newText = text.slice(0,1000);
+    await db.collection('comments').doc(commentId).update({text: newText, editedAt: editedAt});
+    const c = (commentsByEntry[entryId]||[]).find(c=>c.id===commentId);
+    if(c){ c.text = newText; c.editedAt = editedAt; }
   }
 
   // ---------- geo / parsing helpers ----------
@@ -2970,10 +3001,24 @@
       ? comments.map(c=>{
           const mine = visitorUid && c.uid === visitorUid;
           const canDelete = mine || editUnlocked;
+          if(editingCommentId === c.id){
+            return '<div class="comment">'+
+              '<div class="comment-head">'+
+                '<span class="comment-name">'+esc(c.name || 'Anoniem')+'</span>'+
+              '</div>'+
+              '<textarea class="comment-edit-text" id="cEdit-'+esc(c.id)+'" maxlength="1000">'+esc(c.text||'')+'</textarea>'+
+              '<div class="comment-edit-actions">'+
+                '<button class="btn" data-cancel-edit="'+esc(c.id)+'">Annuleren</button>'+
+                '<button class="btn primary" data-save-edit="'+esc(c.id)+'">Opslaan</button>'+
+              '</div>'+
+            '</div>';
+          }
+          const editedTag = c.editedAt ? ' <span class="comment-edited">(bewerkt)</span>' : '';
           return '<div class="comment">'+
             '<div class="comment-head">'+
               '<span class="comment-name">'+esc(c.name || 'Anoniem')+'</span>'+
-              '<span class="comment-time">'+esc(relTime(c.ts))+'</span>'+
+              '<span class="comment-time">'+esc(relTime(c.ts))+editedTag+'</span>'+
+              (mine ? '<button class="comment-edit" data-edit-comment="'+esc(c.id)+'" aria-label="Bewerk reactie">✎</button>' : '')+
               (canDelete ? '<button class="comment-del" data-comment="'+esc(c.id)+'" aria-label="Verwijder reactie">✕</button>' : '')+
             '</div>'+
             '<div class="comment-text">'+esc(c.text || '')+'</div>'+
@@ -3024,6 +3069,41 @@
         }catch(err){
           console.error('comment delete failed', err);
           showSocialError(id, 'Verwijderen lukte niet.');
+        }
+      });
+    });
+
+    el.querySelectorAll('[data-edit-comment]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        editingCommentId = btn.getAttribute('data-edit-comment');
+        renderSocial(id);
+        const ta = $('cEdit-'+editingCommentId);
+        if(ta) ta.focus();
+      });
+    });
+
+    el.querySelectorAll('[data-cancel-edit]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        editingCommentId = null;
+        renderSocial(id);
+      });
+    });
+
+    el.querySelectorAll('[data-save-edit]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const cid = btn.getAttribute('data-save-edit');
+        const ta = $('cEdit-'+cid);
+        const text = ta.value.trim();
+        if(!text) return;
+        btn.disabled = true;
+        try{
+          await updateComment(id, cid, text);
+          editingCommentId = null;
+          renderSocial(id);
+        }catch(err){
+          console.error('comment edit failed', err);
+          btn.disabled = false;
+          showSocialError(id, 'Bewerken lukte niet.');
         }
       });
     });
