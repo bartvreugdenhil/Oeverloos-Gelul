@@ -992,16 +992,23 @@
   .comment-name{font-size:var(--t-small);font-weight:700;color:var(--ink);}
   .comment-time{font-size:var(--t-caps);color:var(--ink-soft);}
   .comment-edited{font-style:italic;}
+  .comment-actions{
+    margin-left:auto;
+    display:flex;
+    align-items:center;
+  }
   .comment-edit,
   .comment-del{
-    margin-left:auto;
     background:none;border:none;
     color:var(--ink-soft);
     font-size:var(--t-caps);
     cursor:pointer;
     padding:0 var(--s1);
     line-height:1;
+    display:inline-flex;
+    align-items:center;
   }
+  .comment-edit svg{width:15px;height:15px;display:block;}
   .comment-edit:hover{color:var(--accent);}
   .comment-del:hover{color:var(--danger);}
   .comment-text{
@@ -2474,7 +2481,8 @@
   const SOCIAL_ICONS = {
     heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
     heartFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></svg>',
-    comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z"/></svg>'
+    comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z"/></svg>',
+    pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>'
   };
 
   const FAB_ICONS = {
@@ -3018,8 +3026,10 @@
             '<div class="comment-head">'+
               '<span class="comment-name">'+esc(c.name || 'Anoniem')+'</span>'+
               '<span class="comment-time">'+esc(relTime(c.ts))+editedTag+'</span>'+
-              (mine ? '<button class="comment-edit" data-edit-comment="'+esc(c.id)+'" aria-label="Bewerk reactie">✎</button>' : '')+
-              (canDelete ? '<button class="comment-del" data-comment="'+esc(c.id)+'" aria-label="Verwijder reactie">✕</button>' : '')+
+              '<div class="comment-actions">'+
+                (mine ? '<button class="comment-edit" data-edit-comment="'+esc(c.id)+'" aria-label="Bewerk reactie">'+SOCIAL_ICONS.pencil+'</button>' : '')+
+                (canDelete ? '<button class="comment-del" data-comment="'+esc(c.id)+'" aria-label="Verwijder reactie">✕</button>' : '')+
+              '</div>'+
             '</div>'+
             '<div class="comment-text">'+esc(c.text || '')+'</div>'+
           '</div>';
