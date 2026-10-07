@@ -2680,22 +2680,24 @@
   async function buildTripElevationProfile(){
     const ids = orderedIds();
     const vnId = manifest && manifest.vietnamStartId;
+    // One Firestore round trip per stage adds up fast in series (each entry
+    // waits for the previous one's fetch to finish), so every track is
+    // requested up front and in parallel; ensureTrack's own cache means a
+    // later render of this chart costs nothing further.
+    const tracks = await Promise.all(ids.map(id => entryHasTrack(entries[id]) ? ensureTrack(id) : Promise.resolve([])));
     let offset = 0, vnStartKm = null;
     const points = [];
-    for(const id of ids){
+    ids.forEach((id, i)=>{
       if(id === vnId) vnStartKm = offset;
       const e = entries[id];
-      if(entryHasTrack(e)){
-        const track = await ensureTrack(id);
-        const pts = track.filter(p=>p.d!=null && p.ele!=null);
-        if(pts.length){
-          pts.forEach(p=> points.push({km: offset+p.d, ele: p.ele, stage: e.stageTitle||''}));
-          offset += pts[pts.length-1].d;
-          continue;
-        }
+      const pts = tracks[i].filter(p=>p.d!=null && p.ele!=null);
+      if(pts.length){
+        pts.forEach(p=> points.push({km: offset+p.d, ele: p.ele, stage: e.stageTitle||''}));
+        offset += pts[pts.length-1].d;
+        return;
       }
       if(e.stats && e.stats.distanceKm!=null) offset += e.stats.distanceKm;
-    }
+    });
     return {points, totalKm: offset, vnStartKm};
   }
 
@@ -2990,6 +2992,17 @@
   let activeCat = {};       // entryId -> '1'|'2'|'3'
   let dayChartInstances = {}; // entryId -> [Chart,...]
   let tripElevChartInstance = null;
+  // Chart.js only reacts to taps on the canvas itself, so on a phone the
+  // tooltip from the last tap stays stuck once a visitor's finger moves on;
+  // tapping anywhere else on the page clears it.
+  document.addEventListener('pointerdown', (e)=>{
+    if(!tripElevChartInstance) return;
+    const canvas = $('elevChart');
+    if(canvas && canvas.contains(e.target)) return;
+    tripElevChartInstance.setActiveElements([]);
+    tripElevChartInstance.tooltip.setActiveElements([], {x:0, y:0});
+    tripElevChartInstance.update();
+  });
 
   const LEG_LABELS = {indonesia:'Indonesië', vietnam:'Vietnam'};
   // Mirrored in both the map and the stage-list headers, since the two
