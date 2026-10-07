@@ -166,6 +166,7 @@
     color:var(--ink);
     box-shadow:0 1px 3px rgba(0,0,0,0.15);
   }
+  .segmented[hidden]{display:none;}
 
   /* ---------- 1. masthead ---------- */
   /* Tall enough that the photo is genuinely the subject, with the wordmark
@@ -248,11 +249,10 @@
   }
   #backupRow button[disabled]{opacity:0.6;cursor:default;}
 
-  /* ---------- 2. glowing panels (intro, vrije associatie) ---------- */
-  /* One card design used twice: the intro is a native <details>, so its toggle
-     needs no JS and stays keyboard-accessible, and the daily thought is the
-     same thing as a plain div (.is-static) that is always open. The hue is a
-     custom property so a panel can be re-themed without duplicating the rules. */
+  /* ---------- 2. glowing panel (intro) ---------- */
+  /* The intro is a native <details>, so its toggle needs no JS and stays
+     keyboard-accessible. The hue is a custom property so the panel can be
+     re-themed without duplicating the rules. */
   .intro-details{
     --glow-rgb:var(--ground-dark-rgb);
     --panel-ink:var(--ground-dark);
@@ -267,16 +267,11 @@
       0 8px 30px rgba(var(--glow-rgb),0.20);
     transition:box-shadow 0.25s ease;
   }
-  .intro-details[open],
-  .intro-details.is-static{
+  .intro-details[open]{
     box-shadow:
       0 0 0 1px rgba(var(--glow-rgb),0.18),
       0 2px 12px rgba(var(--glow-rgb),0.16),
       0 10px 36px rgba(var(--glow-rgb),0.24);
-  }
-  .intro-details.theme-beige{
-    --glow-rgb:var(--beige-deep-rgb);
-    --panel-ink:var(--beige-deep);
   }
   .intro-summary{
     list-style:none;
@@ -302,9 +297,6 @@
     transition:transform 0.2s ease;
   }
   .intro-details[open] .intro-summary::after{transform:translateY(2px) rotate(-135deg);}
-  /* Permanently expanded, so nothing to click and no chevron to point anywhere. */
-  .intro-details.is-static .intro-summary{cursor:default;}
-  .intro-details.is-static .intro-summary::after{content:none;}
   .intro-card{
     font-family:var(--font-display);
     font-size:var(--t-body);
@@ -340,38 +332,61 @@
   .kpi-grid{
     display:grid;
     grid-template-columns:repeat(6,1fr);
-    gap:var(--s5) var(--s4);
+    gap:var(--s3) var(--s4);
     margin:0;
   }
   .kpi{min-width:0;grid-column:span 2;}
   .kpi.hero-stat{grid-column:span 3;}
   .kpi-icon{
-    width:18px;height:18px;
+    width:14px;height:14px;
     color:var(--on-dark-accent);
-    margin-bottom:var(--s2);
+    margin-bottom:4px;
     display:block;
   }
   .kpi-icon svg{width:100%;height:100%;}
   .kpi .v{
     display:block;
-    font-size:26px;
+    font-size:20px;
     font-weight:800;
     letter-spacing:-0.03em;
     line-height:1;
     color:var(--ink-invert);
   }
-  .kpi.hero-stat .v{font-size:46px;}
+  .kpi.hero-stat .v{font-size:34px;}
   .kpi .l{
     display:block;
-    font-size:10px;
+    font-size:9px;
     font-weight:700;
     text-transform:uppercase;
     letter-spacing:0.09em;
     color:var(--ink-invert-soft);
-    margin-top:var(--s2);
-    line-height:1.3;
+    margin-top:4px;
+    line-height:1.25;
   }
-  .kpi.hero-stat .l{font-size:var(--t-caps);}
+  .kpi.hero-stat .l{font-size:10px;}
+
+  @media (max-width:480px){
+    .kpi.hero-stat .v{font-size:26px;}
+    .kpi .v{font-size:16px;}
+  }
+
+  /* Whole-trip elevation profile, directly under the KPI tiles. */
+  .progress-block{
+    margin-top:var(--s5);
+    padding-top:var(--s4);
+    border-top:1px solid var(--sep-invert);
+  }
+  .chart-shell{position:relative;height:130px;}
+  .chart-shell canvas{display:block;}
+  .leg-caption{
+    display:flex;
+    align-items:center;
+    gap:var(--s2);
+    margin-top:var(--s3);
+    font-size:var(--t-caps);
+    color:var(--ink-invert-soft);
+  }
+  .leg-caption .dashed{width:14px;height:0;border-top:2px dashed var(--ink-invert-soft);flex:none;}
 
   /* ---------- e-mailupdates ---------- */
   .subscribe{
@@ -380,6 +395,7 @@
     padding:var(--s4);
     text-align:center;
   }
+  /* <details>, collapsed by default -- people get to the stage list sooner. */
   .subscribe-title{
     font-family:var(--font-display);
     font-size:var(--t-h3);
@@ -387,7 +403,24 @@
     letter-spacing:-0.01em;
     color:var(--ink);
     margin-bottom:var(--s2);
+    cursor:pointer;
+    list-style:none;
+    display:inline-flex;
+    align-items:center;
+    gap:var(--s2);
   }
+  .subscribe-title::-webkit-details-marker{display:none;}
+  .subscribe-title::after{
+    content:'';
+    flex-shrink:0;
+    width:7px;height:7px;
+    border-right:2px solid var(--ink);
+    border-bottom:2px solid var(--ink);
+    transform:translateY(-1px) rotate(45deg);
+    transition:transform 0.2s ease;
+  }
+  .subscribe[open] .subscribe-title::after{transform:translateY(1px) rotate(-135deg);}
+  .subscribe:not([open]) .subscribe-title{margin-bottom:0;}
   .subscribe-form{
     display:flex;
     gap:var(--s2);
@@ -1468,6 +1501,7 @@
   <section class="section">
     <div class="section-inner">
       <div class="section-label">De route</div>
+      <div class="segmented" id="routeLegTabs" hidden></div>
     </div>
     <div class="overview-map" id="overviewMap"></div>
     <div class="section-inner">
@@ -1479,22 +1513,22 @@
     <div class="section-inner">
       <div class="section-label on-dark">Keiharde cijfers</div>
       <div class="kpi-grid" id="kpiGrid"></div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-inner">
-      <div class="intro-details is-static theme-beige" id="dailyCardWrap">
-        <div class="intro-summary">Vrije associatie van de dag</div>
-        <div class="intro-card" id="dailyCard"></div>
+      <div class="progress-block" id="progressBlock" style="display:none;">
+        <div class="chart-shell">
+          <canvas id="elevChart"></canvas>
+        </div>
+        <div class="leg-caption">
+          <span class="dashed"></span>
+          <span id="legCaptionText"></span>
+        </div>
       </div>
     </div>
   </section>
 
   <section class="section" id="subscribeSection" style="display:none;">
     <div class="section-inner">
-      <div class="subscribe">
-        <div class="subscribe-title">Blijf op de hoogte</div>
+      <details class="subscribe">
+        <summary class="subscribe-title">Blijf op de hoogte</summary>
         <form class="subscribe-form" id="subscribeForm" method="post" target="bdFrame">
           <input type="email" id="subscribeEmail" name="email" placeholder="jouw@email.nl" autocomplete="email" required>
           <input type="hidden" name="embed" value="1">
@@ -1502,7 +1536,7 @@
         </form>
         <div class="subscribe-msg" id="subscribeMsg"></div>
         <div class="subscribe-privacy">Je ontvangt alleen een mailtje bij een nieuwe etappe. Verwerking via Buttondown; je kunt je op elk moment afmelden via de link in elke mail.</div>
-      </div>
+      </details>
       <!-- Posting into a hidden iframe keeps the visitor on the page instead of
            being thrown onto Buttondown's own confirmation screen. -->
       <iframe name="bdFrame" id="bdFrame" title="aanmelden" style="display:none;"></iframe>
@@ -1512,6 +1546,7 @@
   <section class="section" id="stagesSection">
     <div class="section-inner">
       <div class="section-label">Etappes</div>
+      <div class="segmented" id="stageLegTabs" hidden></div>
       <div class="stage-list" id="stageList"></div>
     </div>
   </section>
@@ -1584,6 +1619,11 @@
     <div class="field checkfield">
       <label for="fRest"><input type="checkbox" id="fRest"> Rustdag (geen rit)</label>
       <div class="hint">Vink dit aan voor een dag zonder fietsrit — de route en de ritstatistieken vervallen dan.</div>
+    </div>
+
+    <div class="field checkfield">
+      <label for="fVietnamStart"><input type="checkbox" id="fVietnamStart"> Eerste etappe van Vietnam</label>
+      <div class="hint">Vink dit aan bij de etappe waar het Vietnam-deel begint — de etappenummering begint daar opnieuw en de kaart/lijst krijgen een Indonesië/Vietnam-tab. Maar één etappe kan dit vinkje hebben.</div>
     </div>
 
     <div class="two-col">
@@ -1736,8 +1776,9 @@
     console.error('firebase init failed', err);
   }
 
-  let manifest = null; // { title, entryIds: [], passcode }
+  let manifest = null; // { title, entryIds: [], passcode, vietnamStartId }
   let entries = {};    // id -> entry object
+  let activeLeg = null; // 'indonesia' | 'vietnam', once a trip has both
   let editUnlocked = false;
   let pendingTrack = null; // parsed track for the entry currently being created
   let editingEntryId = null; // id of the entry being edited, or null when adding a new one
@@ -2444,6 +2485,15 @@
     return n.toFixed(digits==null?0:digits);
   }
 
+  // Same as fmt, but with a comma as the thousands separator -- for the KPI
+  // tiles, where a number like 18420 otherwise reads as one long digit string.
+  function fmtK(n, digits){
+    if(n==null || isNaN(n)) return '—';
+    const parts = fmt(n, digits).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  }
+
   function statBlock(label, value){
     return '<div class="stat"><span class="v">'+value+'</span><span class="l">'+label+'</span></div>';
   }
@@ -2542,12 +2592,42 @@
 
   function isRest(e){ return !!e && e.kind === 'rest'; }
 
+  // The trip splits into (at most) two legs at a single marked entry
+  // (manifest.vietnamStartId) rather than a stored field per entry, so moving
+  // the split just means re-marking a different entry.
+  function vietnamStartIndex(){
+    if(!manifest || !manifest.vietnamStartId) return -1;
+    return orderedIds().indexOf(manifest.vietnamStartId);
+  }
+  function hasVietnamLeg(){ return vietnamStartIndex() >= 0; }
+  function legOf(id){
+    const vnIdx = vietnamStartIndex();
+    if(vnIdx < 0) return 'indonesia';
+    return orderedIds().indexOf(id) >= vnIdx ? 'vietnam' : 'indonesia';
+  }
+  // Lands a visitor on whichever leg the trip is actually on right now.
+  function defaultLeg(){
+    const ids = orderedIds();
+    return ids.length ? legOf(ids[ids.length-1]) : 'indonesia';
+  }
+  // Lazily resolved so a stray renderOverview()/renderStageList() call that
+  // happens before renderTimeline() has ever run still has a leg to filter by.
+  function currentLeg(){
+    if(activeLeg==null) activeLeg = defaultLeg();
+    return activeLeg;
+  }
+
   // Rest days sit in the list in date order but don't consume an etappe number,
-  // so the ride numbering keeps counting only the days actually ridden.
+  // so the ride numbering keeps counting only the days actually ridden. The
+  // count restarts at the Vietnam marker, so that leg gets its own "Etappe 01".
   function stageNumbers(){
     const map = {};
     let n = 0;
-    orderedIds().forEach(id=>{ map[id] = isRest(entries[id]) ? null : ++n; });
+    const vnIdx = vietnamStartIndex();
+    orderedIds().forEach((id,i)=>{
+      if(vnIdx>=0 && i===vnIdx) n = 0;
+      map[id] = isRest(entries[id]) ? null : ++n;
+    });
     return map;
   }
   function stageLabel(num){
@@ -2582,13 +2662,141 @@
     // two large pairs (span 3) then a trio of counters (span 2).
     // 3+3 / 3+3 / 2+2+2.
     el.innerHTML =
-      kpiBlock('bike', 'kilometer gefietst', fmt(k.km,1), 'hero-stat') +
-      kpiBlock('mountain', 'hoogtemeters overbrugd', fmt(k.elev,0), 'hero-stat') +
-      kpiBlock('words', 'woorden oeverloos geluld', k.words, 'hero-stat') +
-      kpiBlock('days', 'dagen vrij geassocieerd', k.days, 'hero-stat') +
-      kpiBlock('flame', 'bitterballen verbrand', k.bb) +
-      kpiBlock('eye', 'mooie dingen gezien', k.mooie) +
-      kpiBlock('food', 'lekkere dingen gegeten', k.lekkere);
+      kpiBlock('bike', 'kilometer gefietst', fmtK(k.km,1), 'hero-stat') +
+      kpiBlock('mountain', 'hoogtemeters overbrugd', fmtK(k.elev,0), 'hero-stat') +
+      kpiBlock('words', 'woorden oeverloos geluld', fmtK(k.words), 'hero-stat') +
+      kpiBlock('days', 'dagen vrij geassocieerd', fmtK(k.days), 'hero-stat') +
+      kpiBlock('flame', 'bitterballen verbrand', fmtK(k.bb)) +
+      kpiBlock('eye', 'mooie dingen gezien', fmtK(k.mooie)) +
+      kpiBlock('food', 'lekkere dingen gegeten', fmtK(k.lekkere));
+  }
+
+  // Whole-trip elevation profile: every stage's own track, concatenated end
+  // to end with a running cumulative-distance offset, so distance on the x
+  // axis reads continuously across the whole trip rather than resetting each
+  // stage. Entries without a track (rest days, or one logged without a file)
+  // contribute no points but still advance the offset via their stored
+  // distance, so later stages stay correctly positioned.
+  async function buildTripElevationProfile(){
+    const ids = orderedIds();
+    const vnId = manifest && manifest.vietnamStartId;
+    let offset = 0, vnStartKm = null;
+    const points = [];
+    for(const id of ids){
+      if(id === vnId) vnStartKm = offset;
+      const e = entries[id];
+      if(entryHasTrack(e)){
+        const track = await ensureTrack(id);
+        const pts = track.filter(p=>p.d!=null && p.ele!=null);
+        if(pts.length){
+          pts.forEach(p=> points.push({km: offset+p.d, ele: p.ele, stage: e.stageTitle||''}));
+          offset += pts[pts.length-1].d;
+          continue;
+        }
+      }
+      if(e.stats && e.stats.distanceKm!=null) offset += e.stats.distanceKm;
+    }
+    return {points, totalKm: offset, vnStartKm};
+  }
+
+  async function renderTripElevationChart(){
+    const canvas = $('elevChart');
+    const block = $('progressBlock');
+    if(!canvas || !block || !window.Chart) return;
+    try{
+      const {points, totalKm, vnStartKm} = await buildTripElevationProfile();
+      if(tripElevChartInstance){ tripElevChartInstance.destroy(); tripElevChartInstance = null; }
+      if(points.length < 2){ block.style.display = 'none'; return; }
+      block.style.display = '';
+
+      const legCaptionEl = $('legCaptionText');
+      const dashedEl = block.querySelector('.leg-caption');
+      if(vnStartKm!=null){
+        if(dashedEl) dashedEl.style.display = '';
+        if(legCaptionEl) legCaptionEl.textContent = 'km '+fmt(vnStartKm,0)+' — eerste etappe in Vietnam';
+      } else {
+        if(dashedEl) dashedEl.style.display = 'none';
+      }
+
+      const vnLinePlugin = {
+        id:'vnLine',
+        afterDraw(chart){
+          if(vnStartKm==null) return;
+          const x = chart.scales.x.getPixelForValue(vnStartKm);
+          const {top, bottom, left, right} = chart.chartArea;
+          if(x < left || x > right) return;
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.setLineDash([4,4]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, top);
+          ctx.lineTo(x, bottom);
+          ctx.stroke();
+          ctx.restore();
+        }
+      };
+
+      tripElevChartInstance = new Chart(canvas.getContext('2d'), {
+        type:'line',
+        data:{
+          labels: points.map(p=>p.km),
+          datasets:[{
+            data: points.map(p=>p.ele),
+            borderColor:'#D8C39A',
+            backgroundColor:'#D8C39A26',
+            fill:true,
+            borderWidth:2,
+            pointRadius:0,
+            pointHoverRadius:4,
+            pointHoverBackgroundColor:'#D8C39A',
+            pointHoverBorderColor:'#fff',
+            pointHoverBorderWidth:2,
+            tension:0.2
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          interaction:{mode:'index', intersect:false},
+          plugins:{
+            legend:{display:false},
+            tooltip:{
+              backgroundColor:'rgba(28,20,50,0.92)',
+              titleFont:{family:'Inter', size:11, weight:'600'},
+              bodyFont:{family:'Inter', size:12, weight:'700'},
+              padding:10,
+              cornerRadius:8,
+              displayColors:false,
+              callbacks:{
+                title:(items)=> points[items[0].dataIndex].stage,
+                label:(item)=> fmt(points[item.dataIndex].km,0)+' km · '+fmt(item.parsed.y,0)+' m hoogte'
+              }
+            }
+          },
+          scales:{
+            x:{
+              type:'linear',
+              min:0,
+              max: totalKm,
+              bounds:'data',
+              ticks:{ maxTicksLimit:5, color:'rgba(255,255,255,0.66)', font:{size:10, family:'Inter'}, callback:v=>fmt(v,0)+'km' },
+              grid:{ display:false },
+              border:{ color:'rgba(255,255,255,0.18)' }
+            },
+            y:{
+              ticks:{ maxTicksLimit:4, color:'rgba(255,255,255,0.66)', font:{size:10, family:'Inter'}, callback:v=>fmt(v,0)+'m' },
+              grid:{ color:'rgba(255,255,255,0.12)' },
+              border:{ display:false }
+            }
+          }
+        },
+        plugins:[vnLinePlugin]
+      });
+    }catch(err){
+      console.error('trip elevation chart failed', err);
+    }
   }
 
   // ---------- masthead ----------
@@ -2721,12 +2929,17 @@
   function renderStageList(){
     const el = $('stageList');
     if(!el) return;
-    // Unfiltered on purpose: the overview map needs either a route or typed
-    // coordinates, so this list is the only way to reach an entry with neither.
-    const ids = orderedIds();
+    // Unfiltered by route on purpose: the overview map needs either a route or
+    // typed coordinates, so this list is the only way to reach an entry with
+    // neither. The leg tab filters by date/split instead, a separate axis.
+    const filterLeg = hasVietnamLeg();
+    const leg = currentLeg();
+    const ids = orderedIds().filter(id => !filterLeg || legOf(id)===leg);
 
     if(!ids.length){
-      el.innerHTML = '<div class="overview-empty">Nog geen reisbewegingen gelogd.</div>';
+      el.innerHTML = filterLeg
+        ? '<div class="overview-empty">Nog geen etappes in '+esc(LEG_LABELS[leg])+'.</div>'
+        : '<div class="overview-empty">Nog geen reisbewegingen gelogd.</div>';
       return;
     }
 
@@ -2776,12 +2989,40 @@
   const CAT_LABELS = {1:'Oeverloos Gelul', 2:'Vanille Travelblog', 3:'Keiharde Cijfers'};
   let activeCat = {};       // entryId -> '1'|'2'|'3'
   let dayChartInstances = {}; // entryId -> [Chart,...]
+  let tripElevChartInstance = null;
+
+  const LEG_LABELS = {indonesia:'Indonesië', vietnam:'Vietnam'};
+  // Mirrored in both the map and the stage-list headers, since the two
+  // sections aren't adjacent (the KPI panel sits between them) but should
+  // switch leg together.
+  function renderLegTabs(){
+    const show = hasVietnamLeg();
+    [$('routeLegTabs'), $('stageLegTabs')].forEach(el=>{
+      if(!el) return;
+      el.hidden = !show;
+      if(!show) return;
+      el.innerHTML = Object.keys(LEG_LABELS).map(leg=>
+        '<button type="button" data-leg="'+leg+'" class="'+(activeLeg===leg?'active':'')+'">'+LEG_LABELS[leg]+'</button>'
+      ).join('');
+      el.querySelectorAll('[data-leg]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          activeLeg = btn.getAttribute('data-leg');
+          renderLegTabs();
+          renderOverview();
+          renderStageList();
+        });
+      });
+    });
+  }
 
   function renderTimeline(){
+    if(activeLeg==null) activeLeg = defaultLeg();
     renderHero();
     renderKPIs();
+    renderLegTabs();
     renderOverview();
     renderStageList();
+    renderTripElevationChart();
   }
 
   // ---------- routing ----------
@@ -3587,18 +3828,24 @@
     function hasRoute(e){ return entryHasTrack(e); }
     function restPin(e){ return (!hasRoute(e) && isRest(e) && e.restLoc && e.restLoc.lat!=null) ? e.restLoc : null; }
 
-    const ids = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
+    const globalIds = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
+    const filterLeg = hasVietnamLeg();
+    const leg = currentLeg();
+    const ids = filterLeg ? globalIds.filter(id => legOf(id)===leg) : globalIds;
     if(ids.length===0){
-      el.innerHTML = '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
+      el.innerHTML = filterLeg
+        ? '<div class="overview-empty">Nog geen etappes met een route in '+esc(LEG_LABELS[leg])+'.</div>'
+        : '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
       return;
     }
     // "Newest" means the newest ride: a rest day draws no line to highlight.
     const rideIds = ids.filter(id => hasRoute(entries[id]));
     const latestRideId = rideIds[rideIds.length-1];
     // The "Huidige locatie" flag marks where the trip currently stands, so it
-    // only makes sense when the most recent entry overall is a ride: if it's
-    // a rest day, the flag stays off rather than pointing at an older stage.
-    const latestOverallId = ids[ids.length-1];
+    // only makes sense when the most recent entry overall (not just in this
+    // tab's leg) is a ride: if it's a rest day, or it falls in the other leg,
+    // the flag stays off rather than pointing at an older stage.
+    const latestOverallId = globalIds[globalIds.length-1];
     const showCurrentLocation = latestRideId!=null && latestRideId === latestOverallId;
     const CURRENT_LOCATION_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h14l-3 4.5 3 4.5H4"/></svg>';
 
@@ -3745,7 +3992,6 @@
   function closePassOverlay(){ $('passOverlay').classList.remove('open'); }
 
   const INTRO_PLACEHOLDER = 'Tik hier om een introductietekst te schrijven…';
-  const DAILY_PLACEHOLDER = 'Tik hier om de vrije associatie van vandaag te schrijven…';
 
   function renderEditableCard(wrapId, textId, value, placeholder){
     const wrap = $(wrapId), el = $(textId);
@@ -3829,7 +4075,6 @@
     const wrap = $('introWrap');
     if(wrap && editUnlocked && !(manifest && (manifest.intro||'').trim())) wrap.open = true;
   }
-  function renderDailyCard(){ renderEditableCard('dailyCardWrap', 'dailyCard', manifest && manifest.dailyThought, DAILY_PLACEHOLDER); }
 
   // One-off repair for stages logged before the speed fix, whose stats carry a
   // GPS-glitch maximum (390 km/h on one). Recomputes from the stored track,
@@ -3982,7 +4227,6 @@
     $('backupRow').style.display='block';
     updateFabIcon();
     renderIntroCard();
-    renderDailyCard();
     renderCommentBadge();
     if(manifest) renderTimeline();
     backfillMaxSpeeds();
@@ -3996,7 +4240,6 @@
     renderCommentBadge(); // hides it: the count is only for the author
     updateFabIcon();
     renderIntroCard();
-    renderDailyCard();
     if(manifest) renderTimeline();
   }
 
@@ -4246,6 +4489,7 @@
     $('fRest').checked = !!(entry && entry.kind === 'rest');
     $('fRestLoc').value = (entry && entry.restLoc && entry.restLoc.lat!=null)
       ? entry.restLoc.lat + ', ' + entry.restLoc.lon : '';
+    $('fVietnamStart').checked = !!(entry && manifest && manifest.vietnamStartId === entry.id);
     applyRestMode();
     $('fPhotos').value = '';
     highlightIdx = 0;
@@ -4535,6 +4779,11 @@
 
       await saveEntryData(id, entry);
       if(!manifest.entryIds.includes(id)) manifest.entryIds.push(id);
+      // Only one etappe can carry the marker, so checking it here steals it
+      // from whichever entry held it before; unchecking the one that has it
+      // clears the split instead of leaving a stale pointer.
+      if($('fVietnamStart').checked) manifest.vietnamStartId = id;
+      else if(manifest.vietnamStartId === id) manifest.vietnamStartId = null;
       await saveManifest(manifest);
       entries[id] = entry;
       markSeen(id); // the author shouldn't see their own post flagged NIEUW
@@ -4565,10 +4814,6 @@
   $('introCard').addEventListener('blur', async ()=>{
     if(!editUnlocked) return;
     await saveEditableField('introCard', 'intro', INTRO_PLACEHOLDER, renderIntroCard);
-  });
-  $('dailyCard').addEventListener('blur', async ()=>{
-    if(!editUnlocked) return;
-    await saveEditableField('dailyCard', 'dailyThought', DAILY_PLACEHOLDER, renderDailyCard);
   });
 
   if(auth){
@@ -4644,7 +4889,7 @@
 
     if(!firebaseReady){
       showErrorBanner('Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.');
-      manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null, vietnamStartId:null};
       renderOverview();
       return;
     }
@@ -4652,12 +4897,12 @@
     try{
       manifest = await loadManifest();
       if(!manifest){
-        manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+        manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null, vietnamStartId:null};
         await saveManifest(manifest);
       }
     }catch(err){
       console.error('manifest load/save failed', err);
-      manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null, vietnamStartId:null};
       const detail = (err && (err.message || err.toString())) || 'onbekende fout';
       showErrorBanner('Opslagfout bij het laden: '+detail);
     }
@@ -4668,7 +4913,6 @@
     if(manifest && 'passcode' in manifest) delete manifest.passcode;
 
     renderIntroCard();
-    renderDailyCard();
 
     // Entries and social data don't depend on each other, so both requests go
     // out together instead of one waiting on the other.
