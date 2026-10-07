@@ -248,11 +248,10 @@
   }
   #backupRow button[disabled]{opacity:0.6;cursor:default;}
 
-  /* ---------- 2. glowing panels (intro, vrije associatie) ---------- */
-  /* One card design used twice: the intro is a native <details>, so its toggle
-     needs no JS and stays keyboard-accessible, and the daily thought is the
-     same thing as a plain div (.is-static) that is always open. The hue is a
-     custom property so a panel can be re-themed without duplicating the rules. */
+  /* ---------- 2. glowing panel (intro) ---------- */
+  /* The intro is a native <details>, so its toggle needs no JS and stays
+     keyboard-accessible. The hue is a custom property so the panel can be
+     re-themed without duplicating the rules. */
   .intro-details{
     --glow-rgb:var(--ground-dark-rgb);
     --panel-ink:var(--ground-dark);
@@ -267,16 +266,11 @@
       0 8px 30px rgba(var(--glow-rgb),0.20);
     transition:box-shadow 0.25s ease;
   }
-  .intro-details[open],
-  .intro-details.is-static{
+  .intro-details[open]{
     box-shadow:
       0 0 0 1px rgba(var(--glow-rgb),0.18),
       0 2px 12px rgba(var(--glow-rgb),0.16),
       0 10px 36px rgba(var(--glow-rgb),0.24);
-  }
-  .intro-details.theme-beige{
-    --glow-rgb:var(--beige-deep-rgb);
-    --panel-ink:var(--beige-deep);
   }
   .intro-summary{
     list-style:none;
@@ -302,9 +296,6 @@
     transition:transform 0.2s ease;
   }
   .intro-details[open] .intro-summary::after{transform:translateY(2px) rotate(-135deg);}
-  /* Permanently expanded, so nothing to click and no chevron to point anywhere. */
-  .intro-details.is-static .intro-summary{cursor:default;}
-  .intro-details.is-static .intro-summary::after{content:none;}
   .intro-card{
     font-family:var(--font-display);
     font-size:var(--t-body);
@@ -1479,15 +1470,6 @@
     <div class="section-inner">
       <div class="section-label on-dark">Keiharde cijfers</div>
       <div class="kpi-grid" id="kpiGrid"></div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-inner">
-      <div class="intro-details is-static theme-beige" id="dailyCardWrap">
-        <div class="intro-summary">Vrije associatie van de dag</div>
-        <div class="intro-card" id="dailyCard"></div>
-      </div>
     </div>
   </section>
 
@@ -3745,7 +3727,6 @@
   function closePassOverlay(){ $('passOverlay').classList.remove('open'); }
 
   const INTRO_PLACEHOLDER = 'Tik hier om een introductietekst te schrijven…';
-  const DAILY_PLACEHOLDER = 'Tik hier om de vrije associatie van vandaag te schrijven…';
 
   function renderEditableCard(wrapId, textId, value, placeholder){
     const wrap = $(wrapId), el = $(textId);
@@ -3829,7 +3810,6 @@
     const wrap = $('introWrap');
     if(wrap && editUnlocked && !(manifest && (manifest.intro||'').trim())) wrap.open = true;
   }
-  function renderDailyCard(){ renderEditableCard('dailyCardWrap', 'dailyCard', manifest && manifest.dailyThought, DAILY_PLACEHOLDER); }
 
   // One-off repair for stages logged before the speed fix, whose stats carry a
   // GPS-glitch maximum (390 km/h on one). Recomputes from the stored track,
@@ -3982,7 +3962,6 @@
     $('backupRow').style.display='block';
     updateFabIcon();
     renderIntroCard();
-    renderDailyCard();
     renderCommentBadge();
     if(manifest) renderTimeline();
     backfillMaxSpeeds();
@@ -3996,7 +3975,6 @@
     renderCommentBadge(); // hides it: the count is only for the author
     updateFabIcon();
     renderIntroCard();
-    renderDailyCard();
     if(manifest) renderTimeline();
   }
 
@@ -4566,10 +4544,6 @@
     if(!editUnlocked) return;
     await saveEditableField('introCard', 'intro', INTRO_PLACEHOLDER, renderIntroCard);
   });
-  $('dailyCard').addEventListener('blur', async ()=>{
-    if(!editUnlocked) return;
-    await saveEditableField('dailyCard', 'dailyThought', DAILY_PLACEHOLDER, renderDailyCard);
-  });
 
   if(auth){
     auth.onAuthStateChanged(user=>{
@@ -4644,7 +4618,7 @@
 
     if(!firebaseReady){
       showErrorBanner('Kon Firebase niet starten — controleer firebaseConfig bovenaan het script.');
-      manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
       renderOverview();
       return;
     }
@@ -4652,12 +4626,12 @@
     try{
       manifest = await loadManifest();
       if(!manifest){
-        manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+        manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
         await saveManifest(manifest);
       }
     }catch(err){
       console.error('manifest load/save failed', err);
-      manifest = {title:'Naamloze Reis', intro:'', dailyThought:'', entryIds:[], passcode:null};
+      manifest = {title:'Naamloze Reis', intro:'', entryIds:[], passcode:null};
       const detail = (err && (err.message || err.toString())) || 'onbekende fout';
       showErrorBanner('Opslagfout bij het laden: '+detail);
     }
@@ -4668,7 +4642,6 @@
     if(manifest && 'passcode' in manifest) delete manifest.passcode;
 
     renderIntroCard();
-    renderDailyCard();
 
     // Entries and social data don't depend on each other, so both requests go
     // out together instead of one waiting on the other.
