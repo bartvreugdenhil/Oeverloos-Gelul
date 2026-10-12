@@ -1501,7 +1501,6 @@
   <section class="section">
     <div class="section-inner">
       <div class="section-label">De route</div>
-      <div class="segmented" id="routeLegTabs" hidden></div>
     </div>
     <div class="overview-map" id="overviewMap"></div>
     <div class="section-inner">
@@ -3007,25 +3006,22 @@
   });
 
   const LEG_LABELS = {indonesia:'Indonesië', vietnam:'Vietnam'};
-  // Mirrored in both the map and the stage-list headers, since the two
-  // sections aren't adjacent (the KPI panel sits between them) but should
-  // switch leg together.
+  // The map always shows the whole trip -- only the stage list filters by
+  // leg, so this tab lives solely above that list.
   function renderLegTabs(){
+    const el = $('stageLegTabs');
+    if(!el) return;
     const show = hasVietnamLeg();
-    [$('routeLegTabs'), $('stageLegTabs')].forEach(el=>{
-      if(!el) return;
-      el.hidden = !show;
-      if(!show) return;
-      el.innerHTML = Object.keys(LEG_LABELS).map(leg=>
-        '<button type="button" data-leg="'+leg+'" class="'+(activeLeg===leg?'active':'')+'">'+LEG_LABELS[leg]+'</button>'
-      ).join('');
-      el.querySelectorAll('[data-leg]').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          activeLeg = btn.getAttribute('data-leg');
-          renderLegTabs();
-          renderOverview();
-          renderStageList();
-        });
+    el.hidden = !show;
+    if(!show) return;
+    el.innerHTML = Object.keys(LEG_LABELS).map(leg=>
+      '<button type="button" data-leg="'+leg+'" class="'+(activeLeg===leg?'active':'')+'">'+LEG_LABELS[leg]+'</button>'
+    ).join('');
+    el.querySelectorAll('[data-leg]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        activeLeg = btn.getAttribute('data-leg');
+        renderLegTabs();
+        renderStageList();
       });
     });
   }
@@ -3034,8 +3030,8 @@
     if(activeLeg==null) activeLeg = defaultLeg();
     renderHero();
     renderKPIs();
-    renderLegTabs();
     renderOverview();
+    renderLegTabs();
     renderStageList();
     renderTripElevationChart();
   }
@@ -3843,24 +3839,20 @@
     function hasRoute(e){ return entryHasTrack(e); }
     function restPin(e){ return (!hasRoute(e) && isRest(e) && e.restLoc && e.restLoc.lat!=null) ? e.restLoc : null; }
 
-    const globalIds = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
-    const filterLeg = hasVietnamLeg();
-    const leg = currentLeg();
-    const ids = filterLeg ? globalIds.filter(id => legOf(id)===leg) : globalIds;
+    // Always the whole trip, regardless of the Indonesia/Vietnam tab -- only
+    // the stage list below filters by leg; the map stays one continuous route.
+    const ids = orderedIds().filter(id => hasRoute(entries[id]) || restPin(entries[id]));
     if(ids.length===0){
-      el.innerHTML = filterLeg
-        ? '<div class="overview-empty">Nog geen etappes met een route in '+esc(LEG_LABELS[leg])+'.</div>'
-        : '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
+      el.innerHTML = '<div class="overview-empty">Voeg een reisbeweging met een routebestand toe om je etappes hier te zien.</div>';
       return;
     }
     // "Newest" means the newest ride: a rest day draws no line to highlight.
     const rideIds = ids.filter(id => hasRoute(entries[id]));
     const latestRideId = rideIds[rideIds.length-1];
     // The "Huidige locatie" flag marks where the trip currently stands, so it
-    // only makes sense when the most recent entry overall (not just in this
-    // tab's leg) is a ride: if it's a rest day, or it falls in the other leg,
-    // the flag stays off rather than pointing at an older stage.
-    const latestOverallId = globalIds[globalIds.length-1];
+    // only makes sense when the most recent entry overall is a ride: if it's
+    // a rest day, the flag stays off rather than pointing at an older stage.
+    const latestOverallId = ids[ids.length-1];
     const showCurrentLocation = latestRideId!=null && latestRideId === latestOverallId;
     const CURRENT_LOCATION_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h14l-3 4.5 3 4.5H4"/></svg>';
 
