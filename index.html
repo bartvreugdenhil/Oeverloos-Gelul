@@ -2936,7 +2936,9 @@
     // neither. The leg tab filters by date/split instead, a separate axis.
     const filterLeg = hasVietnamLeg();
     const leg = currentLeg();
-    const ids = orderedIds().filter(id => !filterLeg || legOf(id)===leg);
+    // Newest first in the list -- stageNumbers() below still counts from the
+    // trip's actual start, so a card's own "Etappe NN" badge is unaffected.
+    const ids = orderedIds().filter(id => !filterLeg || legOf(id)===leg).reverse();
 
     if(!ids.length){
       el.innerHTML = filterLeg
